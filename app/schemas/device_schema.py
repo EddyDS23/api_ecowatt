@@ -10,12 +10,11 @@ class BaseDevice(BaseModel):
 class DeviceCreate(BaseDevice):
     dev_user_id:int = Field(gt=0)
   
-    
 
 class DeviceUpdate(BaseModel):
-    dev_brand:Optional[str] = Field(min_length=1,max_length=200)
-    dev_model:Optional[str] = Field(min_length=1, max_length=200)
-    dev_endpoint_url:str = Field(min_length=10) 
+    dev_brand:str | None = Field(default=None,min_length=1,max_length=200)
+    dev_model:str | None = Field(default=None,min_length=1, max_length=200)
+    dev_endpoint_url:str | None = Field(default=None,min_length=10) 
 
 class DeviceResponse(BaseDevice):
     dev_id:int
