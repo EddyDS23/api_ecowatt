@@ -1,4 +1,4 @@
-from typing import List
+
 from models import Device
 from sqlalchemy.orm import Session
 
@@ -13,7 +13,7 @@ class DeviceRepository:
     def get_device_by_id_repository(self,dev_id:int) -> Device | None:
         return self.db.query(Device).filter(Device.dev_id == dev_id).first()
     
-    def get_all_device_by_user_repository(self,user_id:int) -> List[Device]:
+    def get_all_device_by_user_repository(self,user_id:int) -> list[Device]:
         return self.db.query(Device).filter(Device.dev_user_id == user_id).all()
 
 
@@ -54,7 +54,7 @@ class DeviceRepository:
             return None
         
 
-    def update_device_status(self, dev_id: int, status: bool) -> Device | None:
+    def change_device_status(self, dev_id: int) -> Device | None:
         try:
             device = self.get_device_by_id_repository(dev_id)
 
@@ -62,10 +62,10 @@ class DeviceRepository:
                 logger.info(f"No se encontró dispositivo con id {dev_id}")
                 return None
             
-            device.dev_status = status
+            device.dev_status = not device.dev_status
             self.db.commit()
             self.db.refresh(device)
-            logger.info(f"Estado del dispositivo {dev_id} actualizado a {status}")
+            logger.info(f"Estado del dispositivo {dev_id} actualizado a {device.dev_status}")
             return device
         
         except Exception as e:

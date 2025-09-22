@@ -1,8 +1,10 @@
+
 CREATE TABLE tbUsers(
 user_id SERIAL NOT NULL,
 user_name VARCHAR(100) NOT NULL,
 user_email VARCHAR(150) NOT NULL,
 user_password VARCHAR(255) NOT NULL,
+user_trf_rate VARCHAR(2) NOT NULL
 user_create TIMESTAMP DEFAULT NOW(),
 CONSTRAINT pk_user_id PRIMARY KEY(user_id),
 CONSTRAINT unique_user_email UNIQUE(user_email)
@@ -30,3 +32,12 @@ CONSTRAINT pk_rep_id PRIMARY KEY(rep_id),
 CONSTRAINT fk_dev_user_id FOREIGN KEY(rep_user_id) REFERENCES tbUsers(user_id)
 );
 
+
+CREATE TABLE tbTarrifs (
+    trf_id SERIAL PRIMARY KEY,             -- Identificador único
+    trf_rate VARCHAR(10) NOT NULL,      -- '1', '1a', '1b', ..., '1f'
+    trf_month INT NOT NULL,                  -- 1 = Enero, 2 = Febrero, ..., 12 = Diciembre
+    trf_type VARCHAR(20) NOT NULL, -- 'basico', 'intermedio', 'excedente', 'intermedio bajo', 'intermedio alto'
+    trf_limit INT NOT NULL,               -- Límite de kWh para ese tramo (0 si es ilimitado/excedente)
+    trf_price DECIMAL(10,3) NOT NULL     -- Precio por kWh en ese tramo
+);

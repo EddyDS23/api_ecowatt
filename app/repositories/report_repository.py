@@ -1,4 +1,4 @@
-from typing import List
+
 from models import Report
 from sqlalchemy.orm import Session
 
@@ -14,7 +14,7 @@ class ReportRepository:
     def get_report_by_id_repository(self,rep_id:int) -> Report | None:
         return self.db.query(Report).filter(Report.rep_id == rep_id).first()
     
-    def get_all_report_by_user_repository(self,user_id:int) -> List[Report]:
+    def get_all_report_by_user_repository(self,user_id:int) -> list[Report]:
         return  self.db.query(Report).filter(Report.rep_user_id == user_id).all()
     
 

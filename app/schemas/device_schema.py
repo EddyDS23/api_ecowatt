@@ -19,6 +19,7 @@ class DeviceUpdate(BaseModel):
 class DeviceResponse(BaseDevice):
     dev_id:int
     dev_user_id:int
+    dev_status:bool
 
     model_config = ConfigDict(from_attributes=True)
 

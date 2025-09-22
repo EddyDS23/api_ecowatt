@@ -49,7 +49,7 @@ class UserRepository:
         
 
 
-    def change_password_user_repository(self,user_id:int,password_hashed:str)-> User | None:
+    def change_password_user_repository(self,user_id:int,password_hashed:str)-> bool | None:
         
         try:
             user = self.get_user_id_repository(user_id)
@@ -63,9 +63,9 @@ class UserRepository:
             self.db.commit()
             self.db.refresh(user)
             logger.info("Contraseña actualizada exitosamente")
-            return user
+            return True
         except Exception as e:
             logger.error(f"Contraseña no actualizado: {e}")
-            return None
+            return False
         
 
