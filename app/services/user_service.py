@@ -1,11 +1,11 @@
 # app/services/user_service.py (ACTUALIZADO)
 
 from sqlalchemy.orm import Session
-from models import User
-from repositories import UserRepository
-from schemas import UserResponse, UserCreate, UserUpdate
+from app.models import User
+from app.repositories import UserRepository
+from app.schemas import UserResponse, UserCreate, UserUpdate
 from passlib.context import CryptContext
-from core import logger
+from app.core import logger
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 

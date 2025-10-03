@@ -3,10 +3,11 @@
 from sqlalchemy.orm import Session
 from fastapi import APIRouter, HTTPException, status, Depends
 
-from database import get_db
-from core import TokenData, get_current_user
-from schemas import UserResponse, UserCreate, UserUpdate
-from services import get_user_by_id_service, create_user_service, update_user_service
+from app.database import get_db
+from app.core import TokenData, get_current_user
+from app.schemas import UserResponse, UserCreate, UserUpdate
+from app.services import get_user_by_id_service, create_user_service, update_user_service
+
 
 router = APIRouter(prefix="/users", tags=["Users"])
 

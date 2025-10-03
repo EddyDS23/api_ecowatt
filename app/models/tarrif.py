@@ -1,7 +1,7 @@
 
 
 from sqlalchemy import Column, Integer, String, DECIMAL, Date
-from database import Base
+from app.database import Base
 
 class Tarrif(Base):
     __tablename__ = "tbtarrifs"

@@ -1,8 +1,8 @@
 
-from models import Device
+from app.models import Device
 from sqlalchemy.orm import Session
 
-from core import logger
+from app.core import logger
 
 class DeviceRepository:
 
@@ -73,7 +73,7 @@ class DeviceRepository:
             return None
 
         
-    def delete_device_repository(self,dev_id:int) -> bool | False:
+    def delete_device_repository(self,dev_id:int) -> bool:
 
         try:
 

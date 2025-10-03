@@ -1,8 +1,8 @@
 
-from models import Report
+from app.models import Report
 from sqlalchemy.orm import Session
 
-from core import logger
+from app.core import logger
 
 
 class ReportRepository:

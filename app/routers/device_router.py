@@ -4,10 +4,10 @@ from typing import List
 from sqlalchemy.orm import Session
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from database import get_db
-from core import TokenData, get_current_user
-from schemas import DeviceResponse, DeviceCreate, DeviceUpdate
-from services import (
+from app.database import get_db
+from app.core import TokenData, get_current_user
+from app.schemas import DeviceResponse, DeviceCreate, DeviceUpdate
+from app.services import (
     create_device_service,
     get_all_devices_by_user_service,
     get_device_by_id_service,

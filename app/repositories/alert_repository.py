@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
-from models import Alert
-from core import logger
+from app.models import Alert
+from app.core import logger
 
 class AlertRepository:
     def __init__(self, db: Session):

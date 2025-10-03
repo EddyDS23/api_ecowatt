@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from models import RefreshToken
+from app.models import RefreshToken
 from datetime import datetime
 
 class RefreshTokenRepository:

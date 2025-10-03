@@ -1,7 +1,7 @@
-from models import User
+from app.models import User
 from sqlalchemy.orm import Session
 
-from core import logger
+from app.core import logger
 
 class UserRepository:
 

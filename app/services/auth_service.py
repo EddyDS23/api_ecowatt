@@ -5,9 +5,9 @@ from fastapi import HTTPException, status
 from datetime import datetime, timedelta, timezone
 import secrets
 
-from repositories import UserRepository, RefreshTokenRepository
-from schemas import UserLogin, TokenResponse
-from core import logger, settings, security
+from app.repositories import UserRepository, RefreshTokenRepository
+from app.schemas import UserLogin, TokenResponse
+from app.core import logger, settings, security
 
 from passlib.context import CryptContext
 

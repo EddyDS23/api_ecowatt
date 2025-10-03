@@ -1,6 +1,6 @@
 
 from sqlalchemy.orm import Session
-from models import Tarrif
+from app.models import Tarrif
 from datetime import date
 
 class TarrifRepository:

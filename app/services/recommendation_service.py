@@ -1,9 +1,9 @@
 # app/services/recommendation_service.py (NUEVO)
 
 from sqlalchemy.orm import Session
-from repositories import RecommendationRepository
-from schemas import RecommendationResponse
-from core import logger
+from app.repositories import RecommendationRepository
+from app.schemas import RecommendationResponse
+from app.core import logger
 
 def get_recommendations_by_user_service(db: Session, user_id: int) -> list[RecommendationResponse]:
     """

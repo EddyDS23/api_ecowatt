@@ -4,13 +4,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 # 1. Importar el router principal desde el paquete de routers
-from routers import api_router
+from app.routers import api_router
 
 app = FastAPI(
     title="EcoWatt API",
     description="API para el monitoreo de consumo eléctrico.",
     version="1.0.0"
 )
+
 
 # Opcional pero recomendado: Añadir middleware de CORS
 app.add_middleware(

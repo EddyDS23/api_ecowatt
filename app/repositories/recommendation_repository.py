@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
-from models import Recommendation
-from core import logger
+from app.models import Recommendation
+from app.core import logger
 
 class RecommendationRepository:
     def __init__(self, db: Session):

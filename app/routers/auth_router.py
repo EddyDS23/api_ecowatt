@@ -2,9 +2,9 @@
 from sqlalchemy.orm import Session
 from fastapi import APIRouter, Depends, status, HTTPException
 
-from database import get_db
-from schemas import UserLogin, TokenResponse, TokenRefreshRequest
-from services import login_for_access_token, refresh_access_token, logout_user
+from app.database import get_db
+from app.schemas import UserLogin, TokenResponse, TokenRefreshRequest
+from app.services import login_for_access_token, refresh_access_token, logout_user
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 

@@ -2,7 +2,7 @@
 from sqlalchemy import Column, Integer, DECIMAL, ForeignKey, TIMESTAMP
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
-from database import Base
+from app.database import Base
 
 class Report(Base):
     __tablename__ = "tbreports"

@@ -1,8 +1,8 @@
 
 from sqlalchemy.orm import Session
-from repositories import AlertRepository
-from schemas import AlertResponse
-from core import logger
+from app.repositories import AlertRepository
+from app.schemas import AlertResponse
+from app.core import logger
 
 def get_alerts_by_user_service(db: Session, user_id: int) -> list[AlertResponse]:
     """

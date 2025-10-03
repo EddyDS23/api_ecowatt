@@ -1,10 +1,10 @@
 # app/services/device_service.py (ACTUALIZADO)
 
 from sqlalchemy.orm import Session
-from models import Device
-from repositories import DeviceRepository
-from schemas import DeviceCreate, DeviceUpdate, DeviceResponse
-from core import logger
+from app.models import Device
+from app.repositories import DeviceRepository
+from app.schemas import DeviceCreate, DeviceUpdate, DeviceResponse
+from app.core import logger
 
 def get_device_by_id_service(db: Session, dev_id: int, user_id: int) -> DeviceResponse | None:
     device_repo = DeviceRepository(db)

@@ -1,6 +1,6 @@
 # app/models/device.py (ACTUALIZADO)
 
-from database import Base
+from app.database import Base
 from sqlalchemy import Column, String, Integer, TIMESTAMP, Boolean, ForeignKey
 from sqlalchemy.sql import func, expression
 from sqlalchemy.orm import relationship 

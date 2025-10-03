@@ -5,7 +5,7 @@ from jose import JWTError, jwt
 from fastapi import HTTPException, Depends, status
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
-from core import settings
+from app.core import settings
 
 # El oauth2_schema no cambia
 oauth2_schema = OAuth2PasswordBearer(tokenUrl="auth/login", auto_error=False)
