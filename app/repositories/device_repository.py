@@ -41,9 +41,8 @@ class DeviceRepository:
                 logger.info(f"No se encontro dispositivo con id {dev_id}")
                 return None
             
-            device.dev_model = update_data.get("dev_model", device.dev_model)
-            device.dev_brand = update_data.get("dev_brand", device.dev_brand)
-            device.dev_endpoint_url = update_data.get("dev_endpoint_url", device.dev_endpoint_url)
+            for key, value in update_data.items():
+                setattr(device, key, value)
             
             self.db.commit()
             self.db.refresh(device)
@@ -74,7 +73,7 @@ class DeviceRepository:
             return None
 
         
-    def delete_device_repository(self,dev_id:int) -> bool | None:
+    def delete_device_repository(self,dev_id:int) -> bool | False:
 
         try:
 
@@ -82,7 +81,7 @@ class DeviceRepository:
 
             if not device:
                 logger.info(f"No se encontro dispositivo con id {dev_id}")
-                return None
+                return False
             
 
             self.db.delete(device)
@@ -91,4 +90,5 @@ class DeviceRepository:
             return True
         except Exception as e:
             logger.error(f"No se pudo eliminar el dispositivo con id {dev_id}: {e}")
+            self.db.rollback()
             return False

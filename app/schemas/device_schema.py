@@ -1,25 +1,21 @@
-from typing import Optional
+# app/schemas/device_schema.py (ACTUALIZADO)
+
 from pydantic import BaseModel, Field, ConfigDict
 
 class BaseDevice(BaseModel):
-    
-    dev_brand:str = Field(min_length=1,max_length=200)
-    dev_model:str = Field(min_length=1, max_length=200)
-    dev_endpoint_url:str = Field(min_length=10) 
+    dev_hardware_id: str = Field(min_length=12, max_length=255)
+    dev_name: str = Field(min_length=3, max_length=100)
 
 class DeviceCreate(BaseDevice):
-    dev_user_id:int = Field(gt=0)
-  
+    pass
 
 class DeviceUpdate(BaseModel):
-    dev_brand:str | None = Field(default=None,min_length=1,max_length=200)
-    dev_model:str | None = Field(default=None,min_length=1, max_length=200)
-    dev_endpoint_url:str | None = Field(default=None,min_length=10) 
+    dev_name: str | None = Field(default=None, min_length=3, max_length=100)
 
 class DeviceResponse(BaseDevice):
-    dev_id:int
-    dev_user_id:int
-    dev_status:bool
-
+    dev_id: int
+    dev_user_id: int
+    dev_status: bool
+    dev_brand: str | None
+    dev_model: str | None
     model_config = ConfigDict(from_attributes=True)
-

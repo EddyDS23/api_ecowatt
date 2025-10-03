@@ -35,8 +35,8 @@ class UserRepository:
                 logger.debug(f"No se encontro usuario con el id {user_id}")
                 return None
             
-            user.user_name = update_data.get("user_name", user.user_name)
-            user.user_email = update_data.get("user_email",user.user_email)
+            for key, value in update_data.items():
+                setattr(user, key, value)
 
             self.db.commit()
             self.db.refresh(user)
@@ -66,6 +66,7 @@ class UserRepository:
             return True
         except Exception as e:
             logger.error(f"Contraseña no actualizado: {e}")
+            self.db.rollback()
             return False
         
 

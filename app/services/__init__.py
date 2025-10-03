@@ -1,2 +1,23 @@
-from .user_service import get_user_service, create_user_service, authenticate_user_service, update_user_service, change_password_user_service
-from .device_service import get_device_by_id_service, get_all_device_by_user_service, create_device_service, update_device_service, delete_device_service, change_status_device_service
+# app/services/__init__.py (ACTUALIZADO)
+
+# Auth Service
+from .auth_service import login_for_access_token, refresh_access_token, logout_user
+
+# User Service
+from .user_service import get_user_by_id_service, create_user_service, update_user_service
+
+# Device Service
+from .device_service import (
+    get_device_by_id_service,
+    get_all_devices_by_user_service,
+    create_device_service,
+    update_device_service,
+    delete_device_service
+)
+
+# Nuevos servicios (solo lectura por ahora)
+from .alert_service import get_alerts_by_user_service
+from .recommendation_service import get_recommendations_by_user_service
+
+# El servicio de reportes lo podemos omitir por ahora, ya que su única
+# función será crear resúmenes, lo cual depende 100% de los datos de Redis.
