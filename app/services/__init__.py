@@ -1,7 +1,7 @@
 # app/services/__init__.py (ACTUALIZADO)
 
 # Auth Service
-from .auth_service import login_for_access_token, refresh_access_token, logout_user
+from .auth_service import login_for_access_token, refresh_access_token, logout_user, request_password_reset, reset_password
 
 # User Service
 from .user_service import get_user_by_id_service, create_user_service, update_user_service
