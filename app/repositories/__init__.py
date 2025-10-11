@@ -8,3 +8,4 @@ from .alert_repository import AlertRepository
 from .recommendation_repository import RecommendationRepository 
 from .refresh_token_repository import RefreshTokenRepository 
 from .password_reset_repository import PasswordResetRepository
+from .timeseries_repository import TimeSeriesRepository

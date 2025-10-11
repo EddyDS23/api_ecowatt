@@ -14,3 +14,4 @@ from .report_schema import ReportResponse, CreateReport, UpdateReport
 # New Schemas
 from .alert_schema import AlertResponse
 from .recommendation_schema import RecommendationResponse
+from .ingest_schema import ShellySwitchStatus, ShellyIngestData, ShellySysStatus
