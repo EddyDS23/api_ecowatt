@@ -2,9 +2,10 @@
 
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
-from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
 from datetime import datetime, timedelta, timezone
+from sib_api_v3_sdk.rest import ApiException
 import secrets
+import sib_api_v3_sdk
 
 
 from app.repositories import UserRepository, RefreshTokenRepository, PasswordResetRepository
@@ -15,18 +16,6 @@ from passlib.context import CryptContext
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-
-conf = ConnectionConfig(
-    MAIL_USERNAME = settings.MAIL_USERNAME,
-    MAIL_PASSWORD = settings.MAIL_PASSWORD,
-    MAIL_FROM = settings.MAIL_FROM,
-    MAIL_PORT = settings.MAIL_PORT,
-    MAIL_SERVER = settings.MAIL_SERVER,
-    MAIL_STARTTLS = settings.MAIL_STARTTLS,
-    MAIL_SSL_TLS = settings.MAIL_SSL_TLS,
-    USE_CREDENTIALS = True,
-    VALIDATE_CERTS = True
-)
 
 def login_for_access_token(db: Session, user_data: UserLogin) -> TokenResponse:
     user_repo = UserRepository(db)
@@ -99,27 +88,36 @@ async def request_password_reset(db: Session, request: ForgotPasswordRequest):
 
     if not user:
         logger.warning(f"Solicitud de reseteo para email no existente: {request.user_email}")
-        # Por seguridad, no revelamos si un email existe. La respuesta siempre es la misma.
         return {"message": "Si tu correo está registrado, recibirás un email con instrucciones."}
 
-    # Generar y guardar el token de reseteo
+    # La lógica para generar y guardar el token no cambia
     reset_repo = PasswordResetRepository(db)
     token = secrets.token_urlsafe(32)
-    expires_at = datetime.now(timezone.utc) + timedelta(hours=1) # El token es válido por 1 hora
+    expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
     reset_repo.create_token(user_id=user.user_id, token=token, expires_at=expires_at)
 
-    # Preparar y enviar el correo
-    message = MessageSchema(
-        subject="Restablecimiento de Contraseña - EcoWatt",
-        recipients=[user.user_email],
-        body=f"Hola {user.user_name},\n\nHas solicitado restablecer tu contraseña. Usa el siguiente token para completar el proceso en la aplicación: \n\nToken: {token}\n\nEste token expirará en 1 hora.\n\nSi no solicitaste esto, por favor ignora este correo.",
-        subtype="plain"
-    )
+    # --- Lógica de envío de correo con la API de Brevo ---
+    configuration = sib_api_v3_sdk.Configuration()
+    configuration.api_key['api-key'] = settings.BREVO_API_KEY
 
-    fm = FastMail(conf)
-    await fm.send_message(message)
-    logger.info(f"Correo de reseteo de contraseña enviado a {user.user_email}")
+    api_instance = sib_api_v3_sdk.TransactionalEmailsApi(sib_api_v3_sdk.ApiClient(configuration))
+
+    subject = "Restablecimiento de Contraseña - EcoWatt"
+    html_content = f"<html><body><p>Hola {user.user_name},</p><p>Has solicitado restablecer tu contraseña. Usa el siguiente token para completar el proceso en la aplicación:</p><h3>Token: {token}</h3><p>Este token expirará en 1 hora.</p><p>Si no solicitaste esto, por favor ignora este correo.</p></body></html>"
+    sender = {"name": "EcoWatt App", "email": settings.BREVO_SENDER_EMAIL}
+    to = [{"email": user.user_email, "name": user.user_name}]
+
+    send_smtp_email = sib_api_v3_sdk.SendSmtpEmail(to=to, html_content=html_content, sender=sender, subject=subject)
+
+    try:
+        api_response = api_instance.send_transac_email(send_smtp_email)
+        logger.info(f"Correo de reseteo enviado a {user.user_email} via API. Message ID: {api_response.message_id}")
+    except ApiException as e:
+        logger.error(f"Error al enviar correo via API de Brevo: {e}")
+        raise HTTPException(status_code=500, detail="No se pudo enviar el correo de recuperación.")
+
     return {"message": "Si tu correo está registrado, recibirás un email con instrucciones."}
+
 
 
 def reset_password(db: Session, request: ResetPasswordRequest):

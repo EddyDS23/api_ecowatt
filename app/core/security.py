@@ -1,4 +1,3 @@
-# app/core/security.py (ACTUALIZADO)
 
 from datetime import datetime, timedelta, timezone
 from jose import JWTError, jwt

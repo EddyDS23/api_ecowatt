@@ -22,6 +22,8 @@ def create_user_service(db: Session, user_data: UserCreate) -> UserResponse | No
     if existing_user:
         logger.warning(f"Intento de crear usuario con email duplicado: {user_data.user_email}")
         return None
+    
+    print(type(user_data.user_password), user_data.user_password)
 
     hashed_password = pwd_context.hash(user_data.user_password)
     user_data_dict = user_data.model_dump()
