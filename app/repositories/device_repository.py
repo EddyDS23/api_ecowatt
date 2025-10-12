@@ -16,6 +16,9 @@ class DeviceRepository:
     def get_all_device_by_user_repository(self,user_id:int) -> list[Device]:
         return self.db.query(Device).filter(Device.dev_user_id == user_id).all()
 
+    def get_device_by_hardware_id_repository(self, hardware_id: str) -> Device | None:
+        return self.db.query(Device).filter(Device.dev_hardware_id == hardware_id).first()
+    
 
     def create_device_repository(self,new_device:Device) -> Device | None:
 

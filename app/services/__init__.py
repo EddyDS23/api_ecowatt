@@ -19,6 +19,8 @@ from .ingest_service import(
     process_shelly_data
 )
 
+from .dashboard_service import get_dashboard_summary
+
 # Nuevos servicios (solo lectura por ahora)
 from .alert_service import get_alerts_by_user_service
 from .recommendation_service import get_recommendations_by_user_service

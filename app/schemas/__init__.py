@@ -15,3 +15,4 @@ from .report_schema import ReportResponse, CreateReport, UpdateReport
 from .alert_schema import AlertResponse
 from .recommendation_schema import RecommendationResponse
 from .ingest_schema import ShellySwitchStatus, ShellyIngestData, ShellySysStatus
+from .dashboard_schema import DashboardSummary

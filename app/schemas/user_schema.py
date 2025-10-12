@@ -5,7 +5,7 @@ from pydantic import BaseModel, EmailStr, ConfigDict, Field
 class BaseUser(BaseModel):
     user_name: str = Field(min_length=5, max_length=100)
     user_email: EmailStr
-    user_trf_rate: str = Field(min_length=1, max_length=10)
+    user_trf_rate: str = Field(default="1f",min_length=1, max_length=10)
     user_billing_day: int = Field(gt=0, lt=32, default=1) # <-- CAMPO AÑADIDO
 
 class UserCreate(BaseUser):
@@ -14,7 +14,7 @@ class UserCreate(BaseUser):
 class UserUpdate(BaseModel):
      user_name: str | None = Field(default=None, min_length=5, max_length=100)
      user_email: EmailStr | None = Field(default=None)
-     user_trf_rate: str | None = Field(default=None, min_length=1, max_length=10)
+     user_trf_rate: str | None = Field(default=None, max_length=3)
      user_billing_day: int | None = Field(default=None, gt=0, lt=32)
 
 class UserChangePassword(BaseModel):
