@@ -1,23 +1,22 @@
-# app/services/ingest_service.py
+# app/services/ingest_service.py (VERSIÓN CORREGIDA)
 
 from sqlalchemy.orm import Session
 from redis import Redis
+import json
+
 from app.repositories import DeviceRepository, TimeSeriesRepository
 from app.schemas import ShellyIngestData
 from app.core import logger
+from app.core.websocket_manager import manager # Importamos el gestor de WebSockets
 
-def process_shelly_data(db: Session, redis_client: Redis, data: ShellyIngestData):
-    """
-    Procesa los datos recibidos de un dispositivo Shelly, incluyendo potencia, voltaje y amperaje.
-    """
+# Hacemos la función asíncrona para poder usar 'await' al enviar el mensaje
+async def process_shelly_data(db: Session, redis_client: Redis, data: ShellyIngestData):
     hardware_id = data.sys_status.mac
-
-    # Extraer los tres valores del schema
     watts = data.switch_status.apower
     volts = data.switch_status.voltage
     amps = data.switch_status.current
 
-    # 1. Buscar el dispositivo en PostgreSQL (sin cambios)
+    # 1. Buscar el dispositivo en PostgreSQL
     device_repo = DeviceRepository(db)
     device = device_repo.get_device_by_hardware_id_repository(hardware_id)
 
@@ -26,7 +25,7 @@ def process_shelly_data(db: Session, redis_client: Redis, data: ShellyIngestData
         logger.warning(f"Datos recibidos de un dispositivo {status}: {hardware_id}")
         return
 
-    # 2. Guardar las tres mediciones en Redis
+    # 2. Guardar las mediciones en Redis
     ts_repo = TimeSeriesRepository(redis_client)
     ts_repo.add_measurements(
         user_id=device.dev_user_id,
@@ -36,4 +35,10 @@ def process_shelly_data(db: Session, redis_client: Redis, data: ShellyIngestData
         amps=amps
     )
 
-    # (Aquí es donde, en el futuro, también enviaremos los datos por WebSocket)
+    # 3. Preparar y enviar los datos a través del WebSocket
+    message_to_broadcast = {
+        "watts": watts,
+        "volts": volts,
+        "amps": amps
+    }
+    await manager.broadcast_to_device(device.dev_id, json.dumps(message_to_broadcast))
