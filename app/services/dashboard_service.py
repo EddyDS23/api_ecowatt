@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from dateutil.relativedelta import relativedelta
 
 from app.repositories import TarrifRepository, UserRepository
-from app.core import logger
+from app.core import logger, settings
 
 def get_dashboard_summary(db: Session, redis_client: Redis, user_id: int):
     # 1. Obtener la información del usuario desde PostgreSQL
@@ -83,11 +83,20 @@ def get_dashboard_summary(db: Session, redis_client: Redis, user_id: int):
             estimated_cost += kwh_in_this_tier * float(tariff.trf_price_per_kwh)
             kwh_remaining_to_bill -= kwh_in_this_tier
 
+    # --- Calculo de la Huella de Carbono ---
+    co2_emitted_kg = total_kwh * settings.CARBON_EMISSION_FACTOR_KG_PER_KWH
+    equivalent_trees_absorption_per_year = co2_emitted_kg / 22
+
+
     return {
         "kwh_consumed_cycle": round(total_kwh, 2),
         "estimated_cost_mxn": round(estimated_cost, 2),
         "billing_cycle_start": start_date.date(),
         "billing_cycle_end": end_date.date(),
         "days_in_cycle": (now_utc.date() - start_date.date()).days,
-        "current_tariff": user.user_trf_rate
+        "current_tariff": user.user_trf_rate,
+        "carbon_footprint": {
+            "co2_emitted_kg": round(co2_emitted_kg, 2),
+            "equivalent_trees_absorption_per_year": round(equivalent_trees_absorption_per_year, 4)
+        }
     }

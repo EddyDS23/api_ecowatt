@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     ALGORITHM:str
     BREVO_API_KEY:str
     BREVO_SENDER_EMAIL:str
+    CARBON_EMISSION_FACTOR_KG_PER_KWH:float
     
 
 
