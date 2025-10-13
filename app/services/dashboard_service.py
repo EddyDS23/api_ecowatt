@@ -5,7 +5,7 @@ from redis import Redis
 from datetime import datetime, timedelta, timezone 
 from dateutil.relativedelta import relativedelta
 
-from app.repositories import TarrifRepository, UserRepository
+from app.repositories import TarrifRepository, UserRepository, RecommendationRepository
 from app.core import logger, settings
 
 def get_dashboard_summary(db: Session, redis_client: Redis, user_id: int):
@@ -87,6 +87,14 @@ def get_dashboard_summary(db: Session, redis_client: Redis, user_id: int):
     co2_emitted_kg = total_kwh * settings.CARBON_EMISSION_FACTOR_KG_PER_KWH
     equivalent_trees_absorption_per_year = co2_emitted_kg / 22
 
+    # --- NUEVA LÓGICA: OBTENER LA ÚLTIMA RECOMENDACIÓN ---
+    rec_repo = RecommendationRepository(db)
+    latest_recommendation_obj = rec_repo.get_latest_recommendation_by_user(user_id)
+    
+    latest_recommendation_text = None
+    if latest_recommendation_obj:
+        latest_recommendation_text = latest_recommendation_obj.rec_text
+
 
     return {
         "kwh_consumed_cycle": round(total_kwh, 2),
@@ -98,5 +106,6 @@ def get_dashboard_summary(db: Session, redis_client: Redis, user_id: int):
         "carbon_footprint": {
             "co2_emitted_kg": round(co2_emitted_kg, 2),
             "equivalent_trees_absorption_per_year": round(equivalent_trees_absorption_per_year, 4)
-        }
+        },
+        "latest_recommendation": latest_recommendation_text
     }

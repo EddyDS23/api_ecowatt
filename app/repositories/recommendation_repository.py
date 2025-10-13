@@ -21,3 +21,6 @@ class RecommendationRepository:
     
     def get_recommendations_by_user(self, user_id: int) -> list[Recommendation]:
         return self.db.query(Recommendation).filter(Recommendation.rec_user_id == user_id).order_by(Recommendation.rec_created_at.desc()).all()
+    
+    def get_latest_recommendation_by_user(self, user_id: int) -> Recommendation | None:
+        return self.db.query(Recommendation).filter(Recommendation.rec_user_id == user_id).order_by(Recommendation.rec_created_at.desc()).first()

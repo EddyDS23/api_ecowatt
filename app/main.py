@@ -3,6 +3,52 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
+from celery import Celery
+from celery.schedules import crontab
+from app.core import settings, logger
+from app.services import analyze_consumption_patterns
+
+
+celery_app = Celery(
+    'tasks',
+    broker=settings.URL_DATABASE_REDIS,
+    backend=settings.URL_DATABASE_REDIS
+)
+
+# Esto es importante para que Celery pueda encontrar las tareas
+celery_app.conf.update(
+    task_serializer='json',
+    result_serializer='json',
+    accept_content=['json']
+)
+
+# --- Definición de Tareas Programadas (Celery Beat) ---
+@celery_app.on_after_configure.connect
+def setup_periodic_tasks(sender, **kwargs):
+    """
+    Configura las tareas que se ejecutarán periódicamente.
+    """
+    logger.info("Configurando tareas periódicas de Celery...")
+    # Añade la tarea de análisis para que se ejecute cada hora, en el minuto 0.
+    sender.add_periodic_task(
+        crontab(minute='0'),  # Puedes cambiarlo a '*/30' para cada 30 min, etc.
+        run_analysis.s(),
+        name='Analizar consumo de energía cada hora'
+    )
+
+# --- Tarea de Celery ---
+@celery_app.task
+def run_analysis():
+    """
+    Esta es la tarea que Celery ejecutará. Llama a nuestra lógica de servicio.
+    """
+    logger.info("--- [CELERY TASK]: Iniciando análisis de patrones de consumo ---")
+    try:
+        analyze_consumption_patterns()
+        logger.info("--- [CELERY TASK]: Análisis de patrones completado exitosamente ---")
+    except Exception as e:
+        logger.error(f"--- [CELERY TASK]: Ocurrió un error durante el análisis: {e} ---")
+
 
 # 1. Importar AMBOS routers desde el paquete de routers
 from app.routers import api_router, websocket_router

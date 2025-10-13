@@ -9,6 +9,8 @@ class DeviceRepository:
     def __init__(self, db:Session):
         self.db = db
 
+    def get_all_active_devices(self) -> list[Device]:
+        return self.db.query(Device).filter(Device.dev_status == True).all()
     
     def get_device_by_id_repository(self,dev_id:int) -> Device | None:
         return self.db.query(Device).filter(Device.dev_id == dev_id).first()

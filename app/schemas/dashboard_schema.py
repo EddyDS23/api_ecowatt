@@ -15,3 +15,4 @@ class DashboardSummary(BaseModel):
     days_in_cycle: int
     current_tariff: str
     carbon_footprint: CarbonFootprintData 
+    latest_recommendation: str | None = None
