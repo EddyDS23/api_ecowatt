@@ -1,1 +1,1 @@
-from .database import Base, get_db, get_redis_client
+from .database import Base, get_db, get_redis_client, SessionLocal
