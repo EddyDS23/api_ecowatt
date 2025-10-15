@@ -1,38 +1,30 @@
-# shelly_simulator.py
+# shelly_high_consumption_simulator.py
 import requests
 import time
 import random
 
 # --- CONFIGURACIÓN ---
-# La URL de tu API en el servidor. Asegúrate de que sea la correcta.
-API_INGEST_URL = "http://127.0.0.1:8000/api/v1/ingest/shelly"
+API_INGEST_URL = "https://core-cloud.dev/api/v1/ingest/shelly"
+SHELLY_MAC_ADDRESS = "1a2b3c4d5e1a"  # MAC registrada en tu base de datos
 
-# La dirección MAC de un dispositivo de prueba que YA hayas registrado en tu BD.
-# Ve a tu tabla `tbdevice` y copia el `dev_hardware_id` de un dispositivo.
-SHELLY_MAC_ADDRESS = "A1C4S2F2K1C1" # <-- ¡CAMBIA ESTO!
+# Intervalo entre envíos (en segundos)
+SEND_INTERVAL = 10
 
-def generate_consumption_data():
-    """Simula el consumo eléctrico fluctuante."""
-    base_watts = random.uniform(100, 300) # Consumo base (standby)
-    if 7 <= time.localtime().tm_hour < 10: # Pico de la mañana
-        base_watts += random.uniform(500, 1500)
-    if 19 <= time.localtime().tm_hour < 22: # Pico de la noche
-        base_watts += random.uniform(800, 2000)
-
-    voltage = random.uniform(120.0, 128.0)
-    current = base_watts / voltage
-
+def generate_high_consumption_data():
+    """Genera consumo alto constante, independiente de la hora."""
+    # Consumo alto entre 2000 W y 5000 W
+    watts = random.uniform(2000, 5000)
+    volts = random.uniform(120.0, 128.0)
+    amps = watts / volts
     return {
-        "watts": round(base_watts, 2),
-        "volts": round(voltage, 2),
-        "amps": round(current, 2)
+        "watts": round(watts, 2),
+        "volts": round(volts, 2),
+        "amps": round(amps, 2)
     }
 
 def send_data_to_api():
-    """Construye el JSON y lo envía al endpoint de ingesta."""
-    consumption = generate_consumption_data()
-
-    # Este es el formato exacto del JSON que espera tu API
+    """Envía los datos a la API."""
+    consumption = generate_high_consumption_data()
     payload = {
         "switch:0": {
             "id": 0,
@@ -44,24 +36,20 @@ def send_data_to_api():
             "mac": SHELLY_MAC_ADDRESS
         }
     }
-
     try:
         response = requests.post(API_INGEST_URL, json=payload, timeout=5)
         if response.status_code == 200:
-            print(f"✅ Datos enviados exitosamente: {consumption['watts']}W")
+            print(f"✅ Datos enviados: {consumption['watts']} W")
         else:
             print(f"❌ Error del servidor: {response.status_code} - {response.text}")
     except requests.exceptions.RequestException as e:
-        print(f"🔥 Error de conexión: No se pudo conectar a la API. ¿Está corriendo? -> {e}")
+        print(f"🔥 Error de conexión: {e}")
 
 if __name__ == "__main__":
-    print("🚀 Iniciando simulador de Shelly...")
-    print(f"Enviando datos a: {API_INGEST_URL}")
+    print("🚀 Simulador de alto consumo iniciado...")
+    print(f"Enviando datos cada {SEND_INTERVAL}s a: {API_INGEST_URL}")
     print(f"Usando MAC: {SHELLY_MAC_ADDRESS}")
-
-    if SHELLY_MAC_ADDRESS == "A1B2C3D4E5F6":
-        print("\n⚠️ ADVERTENCIA: ¡No has cambiado la dirección MAC de prueba!")
 
     while True:
         send_data_to_api()
-        time.sleep(10) # Envía datos cada 10 segundos
+        time.sleep(SEND_INTERVAL)
