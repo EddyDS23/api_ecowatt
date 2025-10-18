@@ -80,6 +80,7 @@ def _detect_vampire_consumption(db: Session, redis_client: Redis, device):
                 db=db,
                 user_id=device.dev_user_id,
                 device_name=device.dev_name,
+                device_id=device.dev_id,
                 alert_type="VAMPIRE_CONSUMPTION",
                 value=f"{average_night_watts:.2f}W"
             )
