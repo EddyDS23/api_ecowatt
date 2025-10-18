@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     BREVO_SENDER_EMAIL:str
     CARBON_EMISSION_FACTOR_KG_PER_KWH:float
     GEMINIS_API_KEY:str
+    DISCORD_WEBHOOK_URL:str
     
 
 
