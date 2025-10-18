@@ -6,13 +6,14 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.database import get_db
 from app.core import TokenData, get_current_user
-from app.schemas import DeviceResponse, DeviceCreate, DeviceUpdate
+from app.schemas import DeviceResponse, DeviceCreate, DeviceUpdate, DeviceFCMRegister
 from app.services import (
     create_device_service,
     get_all_devices_by_user_service,
     get_device_by_id_service,
     update_device_service,
-    delete_device_service
+    delete_device_service,
+    register_fcm_token_service
 )
 
 router = APIRouter(prefix="/devices", tags=["Devices"])
@@ -47,3 +48,22 @@ def delete_device_route(dev_id: int, db: Session = Depends(get_db), current_user
     success = delete_device_service(db, dev_id=dev_id, user_id=current_user.user_id)
     if not success:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dispositivo no encontrado.")
+    
+
+@router.patch("/{dev_id}/register-fcm", status_code=status.HTTP_200_OK, tags=["Devices"]) # Añadido tags para agrupar
+def register_fcm_token_route(
+    dev_id: int,
+    dev_fcm_data: DeviceFCMRegister, # El cuerpo de la petición contendrá el token
+    db: Session = Depends(get_db),
+    current_user: TokenData = Depends(get_current_user)
+):
+    """
+    Registra el token FCM enviado por la app móvil para un dispositivo específico.
+    """
+    success = register_fcm_token_service(db, dev_id=dev_id, user_id=current_user.user_id, dev_fcm_data=dev_fcm_data)
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, # O 403 Forbidden si prefieres
+            detail="Dispositivo no encontrado o no pertenece al usuario."
+        )
+    return {"message": "Token FCM registrado exitosamente."}

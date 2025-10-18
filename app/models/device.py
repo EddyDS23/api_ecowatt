@@ -16,5 +16,6 @@ class Device(Base):
     dev_model =         Column(String(200), default='1PM Gen4')
     dev_installed =     Column(TIMESTAMP(timezone=True), server_default=func.now())
     dev_status =        Column(Boolean, server_default=expression.true())
+    dev_fcm_token =     Column(String(255), nullable=True, index=True)
 
     user = relationship("User", back_populates="devices")

@@ -3,7 +3,7 @@
 from sqlalchemy.orm import Session
 from app.models import Device
 from app.repositories import DeviceRepository
-from app.schemas import DeviceCreate, DeviceUpdate, DeviceResponse
+from app.schemas import DeviceCreate, DeviceUpdate, DeviceResponse, DeviceFCMRegister
 from app.core import logger
 
 def get_device_by_id_service(db: Session, dev_id: int, user_id: int) -> DeviceResponse | None:
@@ -69,3 +69,27 @@ def delete_device_service(db: Session, dev_id: int, user_id: int) -> bool:
         return False # No se encontró o no pertenece al usuario
         
     return device_repo.delete_device_repository(dev_id)
+
+
+def register_fcm_token_service(db: Session, dev_id: int, user_id: int, dev_fcm_data: DeviceFCMRegister) -> bool:
+    """
+    Registra o actualiza el token FCM para un dispositivo específico del usuario.
+    """
+    device_repo = DeviceRepository(db)
+    device_to_update = device_repo.get_device_by_id_repository(dev_id)
+
+    # Verificar si el dispositivo existe y pertenece al usuario
+    if not device_to_update or device_to_update.dev_user_id != user_id:
+        logger.warning(f"Usuario {user_id} intentó registrar token FCM para dispositivo {dev_id} no autorizado o inexistente.")
+        return False
+
+    # Actualizar el token usando el repositorio
+    # Usamos la función update_device_repository que ya existe y puede actualizar cualquier campo
+    updated_device = device_repo.update_device_repository(dev_id, {"dev_fcm_token": dev_fcm_data.fcm_token})
+
+    if updated_device:
+        logger.info(f"Token FCM actualizado para dispositivo {dev_id} del usuario {user_id}.")
+        return True
+    else:
+        logger.error(f"No se pudo actualizar el token FCM para dispositivo {dev_id}.")
+        return False

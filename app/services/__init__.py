@@ -12,7 +12,8 @@ from .device_service import (
     get_all_devices_by_user_service,
     create_device_service,
     update_device_service,
-    delete_device_service
+    delete_device_service,
+    register_fcm_token_service
 )
 
 from .ingest_service import(

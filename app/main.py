@@ -7,6 +7,17 @@ from app.core import settings, logger
 from app.services import analyze_consumption_patterns
 from app.core.discord_logger import send_discord_alert
 from app.routers import api_router, websocket_router
+import firebase_admin
+from firebase_admin import credentials
+
+try:
+    cred = credentials.Certificate(settings.FIREBASE_CREDENTIALS_PATH)
+    firebase_admin.initialize_app(cred)
+    logger.info("Firebase Admin SDK inicializado correctamente.")
+except Exception as e:
+    logger.error(f"Error al inicializar Firebase Admin SDK: {e}")
+
+
 
 
 # --- Configuración de Celery ---

@@ -19,6 +19,7 @@ CREATE TABLE tbDevice(
     dev_name VARCHAR(100) NOT NULL,        -- Nombre que el usuario le da (ej: "Cocina")
     dev_brand VARCHAR(200) DEFAULT 'Shelly',
     dev_model VARCHAR(200) DEFAULT '1PM Gen4',
+    dev_fcm_token VARCHAR(255),
     dev_installed TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     dev_status BOOLEAN DEFAULT true,
     CONSTRAINT pk_dev_id PRIMARY KEY(dev_id),

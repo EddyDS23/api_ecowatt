@@ -6,7 +6,7 @@ from .auth_schema import UserLogin, TokenResponse, TokenRefreshRequest, ResetPas
 from .user_schema import UserResponse, UserCreate, UserUpdate, UserChangePassword
 
 # Device Schemas
-from .device_schema import DeviceResponse, DeviceCreate, DeviceUpdate
+from .device_schema import DeviceResponse, DeviceCreate, DeviceUpdate, DeviceFCMRegister
 
 # Report Schemas
 from .report_schema import ReportResponse, CreateReport, UpdateReport

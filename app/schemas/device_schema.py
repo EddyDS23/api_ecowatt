@@ -12,6 +12,9 @@ class DeviceCreate(BaseDevice):
 class DeviceUpdate(BaseModel):
     dev_name: str | None = Field(default=None, min_length=3, max_length=100)
 
+class DeviceFCMRegister(BaseModel):
+    dev_fcm_token: str = Field(..., min_length=10)
+
 class DeviceResponse(BaseDevice):
     dev_id: int
     dev_user_id: int

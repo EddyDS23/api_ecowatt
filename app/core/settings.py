@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     CARBON_EMISSION_FACTOR_KG_PER_KWH:float
     GEMINIS_API_KEY:str
     DISCORD_WEBHOOK_URL:str
-    
+    FIREBASE_CREDENTIALS_PATH:str
 
 
     model_config = {"env_file":".env"}
