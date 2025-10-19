@@ -29,6 +29,10 @@ def generate_recommendation_with_gemini(db: Session, user_id: int, alert_type: s
         response = model.generate_content(prompt)
         
         recommendation_text = response.text.strip()
+        if not recommendation_text:
+             logger.warning(f"Gemini devolvió una respuesta vacía para alerta tipo {alert_type}.")
+             return
+
         logger.info(f"Respuesta de Gemini recibida: '{recommendation_text}'")
 
         rec_repo = RecommendationRepository(db)
@@ -37,7 +41,7 @@ def generate_recommendation_with_gemini(db: Session, user_id: int, alert_type: s
     except Exception as e:
         logger.error(f"Error al generar recomendación con Gemini: {e}")
 
-# --- ¡AQUÍ ESTÁ EL CAMBIO CLAVE! ---
+
 def _create_prompt_for_gemini(alert_type: str, device_name: str, value: str) -> str | None:
     """
     Función auxiliar para construir el texto del prompt según el tipo de alerta.
@@ -52,5 +56,15 @@ def _create_prompt_for_gemini(alert_type: str, device_name: str, value: str) -> 
             "Ejemplo de pasos: 1. Revisa aparatos con luces piloto. 2. Desconecta dispositivos que no uses. 3. Usa un multicontacto. "
             "Usa un tono proactivo y de detective. No uses markdown."
         ).format(device_name=device_name, value=value)
+    
+    elif alert_type == "HIGH_CONSUMPTION_PEAK":
+        return (
+            "Actúa como un experto en ahorro de energía para el hogar en México. "
+            f"Un usuario ha detectado un pico de consumo alto y sostenido de {value} en el circuito eléctrico llamado '{device_name}'. "
+            "Esto podría ser un aparato de alto consumo olvidado encendido o una posible falla. "
+            "Genera una recomendación corta (máximo 1 párrafo), amigable y directa para que el usuario revise qué pudo causar ese pico. "
+            "Ejemplo: Revisa si dejaste encendido el horno, parrilla eléctrica, calentador o alguna herramienta potente en el área de '{device_name}'. Si no es obvio, considera revisar esos aparatos. "
+            "Tono útil y directo. Sin markdown."
+        ).format(device_name=device_name, value=value) # 
     
     return None

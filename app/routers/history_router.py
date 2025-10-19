@@ -7,6 +7,7 @@ from app.database import get_db, get_redis_client
 from app.core import TokenData, get_current_user
 from app.schemas import HistoryPeriod, HistoryResponse
 from app.services import get_history_data
+from app.services import get_last_7_days_data
 
 router = APIRouter(prefix="/history", tags=["History"])
 
@@ -22,3 +23,15 @@ def get_history_graph_route(period:HistoryPeriod = Query(...,description="El per
         )
     
     return history_data
+
+
+@router.get("/last7days")
+def get_last_7_days_graph(
+    db: Session = Depends(get_db),
+    redis_client: Redis = Depends(get_redis_client),
+    current_user: TokenData = Depends(get_current_user)
+):
+    result = get_last_7_days_data(db, redis_client, current_user.user_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="No hay datos de los últimos 7 días.")
+    return result

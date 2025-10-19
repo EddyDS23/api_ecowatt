@@ -22,7 +22,7 @@ from .ingest_service import(
 
 from .dashboard_service import get_dashboard_summary
 
-from .history_service import get_history_data
+from .history_service import get_history_data, get_last_7_days_data
 
 from .analysis_service import analyze_consumption_patterns
 

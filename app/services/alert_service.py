@@ -24,6 +24,9 @@ def create_alert_and_recommendation(db: Session, user_id: int, device_name: str,
         title = "🕵🏻Consumo Nocturno Detectado"
         # El device_name ahora se interpreta como el nombre del circuito, ej: "Cocina"
         body = f"Hemos detectado un consumo base de {value} en tu circuito '{device_name}' durante la noche. ¡Podrías tener un 'vampiro' eléctrico!"
+    elif alert_type == "HIGH_CONSUMPTION_PEAK":
+        title = "⚡ Pico de Consumo Detectado"
+        body = f"Se registró un consumo elevado y sostenido de {value} en '{device_name}'. ¿Hay algún aparato de alto consumo encendido?" 
     else:
         title = "Alerta de Consumo"
         body = f"Se detectó un evento en el circuito '{device_name}' con valor {value}."
