@@ -17,3 +17,17 @@ from .recommendation_schema import RecommendationResponse
 from .ingest_schema import ShellySwitchStatus, ShellyIngestData, ShellySysStatus
 from .dashboard_schema import DashboardSummary
 from .history_schema import HistoryPeriod, HistoryResponse
+
+from .monthly_report_schema import (
+    MonthlyReport,
+    GenerateReportRequest,
+    ReportHeader,
+    ExecutiveSummary,
+    ConsumptionDetails,
+    CostBreakdown,
+    EnvironmentalImpact,
+    MonthAlert,
+    MonthRecommendation,
+    DailyConsumptionPoint,
+    TariffLevel
+)

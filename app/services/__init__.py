@@ -30,6 +30,5 @@ from .analysis_service import analyze_consumption_patterns
 from .alert_service import get_alerts_by_user_service
 from .recommendation_service import get_recommendations_by_user_service
 
-# El servicio de reportes lo podemos omitir por ahora, ya que su única
-# función será crear resúmenes, lo cual depende 100% de los datos de Redis.
 
+from .report_service import generate_monthly_report
