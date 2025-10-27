@@ -29,7 +29,7 @@ def get_history_data(db: Session, redis_client: Redis, user_id: int, period: His
 
     watts_key = f"ts:user:{user_id}:device:{active_device.dev_id}:watts"
 
-    now_dt = datetime.now(timezone.utc)
+    now_dt = datetime.now()
     now_ts = int(now_dt.timestamp() * 1000)
 
     # PASO 1: Detectar el rango real de datos disponibles
@@ -147,7 +147,7 @@ def _get_data_with_timeseries(redis_client, watts_key, from_ts, now_ts, bucket_d
         else:
             logger.info(f"📊 Buckets recibidos de Redis:")
             for i, (ts, value) in enumerate(aggregated_data[:5]):  # Mostrar primeros 5
-                dt = datetime.fromtimestamp(ts / 1000, tz=timezone.utc)
+                dt = datetime.fromtimestamp(ts / 1000)
                 logger.info(f"   [{i}] {dt} → {value:.2f}W")
             if len(aggregated_data) > 5:
                 logger.info(f"   ... y {len(aggregated_data) - 5} buckets más")
@@ -164,7 +164,7 @@ def _get_data_with_timeseries(redis_client, watts_key, from_ts, now_ts, bucket_d
             data_map[normalized_ts] = watts_value
             total_watts_sum += watts_value
             
-            dt = datetime.fromtimestamp(normalized_ts / 1000, tz=timezone.utc)
+            dt = datetime.fromtimestamp(normalized_ts / 1000)
             logger.debug(f"   🔄 Bucket normalizado: {dt} → {watts_value:.2f}W")
 
         avg_watts = total_watts_sum / len(aggregated_data) if aggregated_data else 0
@@ -179,14 +179,14 @@ def _get_data_with_timeseries(redis_client, watts_key, from_ts, now_ts, bucket_d
         current_ts = normalized_from_ts
         
         logger.info(f"🔨 Generando {expected_buckets} data points...")
-        logger.info(f"   Inicio normalizado: {datetime.fromtimestamp(normalized_from_ts / 1000, tz=timezone.utc)}")
+        logger.info(f"   Inicio normalizado: {datetime.fromtimestamp(normalized_from_ts / 1000)}")
         
         total_kwh = 0
         points_with_data = 0
         
         for i in range(expected_buckets):
             bucket_start = current_ts
-            dt_object = datetime.fromtimestamp(bucket_start / 1000, tz=timezone.utc)
+            dt_object = datetime.fromtimestamp(bucket_start / 1000)
             
             # Buscar si hay datos para este bucket normalizado
             avg_power_watts = data_map.get(bucket_start, 0.0)
@@ -261,7 +261,7 @@ def _get_data_with_zset_fallback(redis_client, watts_key, from_ts, now_ts, bucke
         # Generar data_points con todos los buckets
         data_points = []
         for bucket_start in sorted(buckets.keys()):
-            dt_object = datetime.fromtimestamp(bucket_start / 1000, tz=timezone.utc)
+            dt_object = datetime.fromtimestamp(bucket_start / 1000)
             agg = buckets[bucket_start]
             
             if agg["count"] == 0:
@@ -290,7 +290,7 @@ def _generate_empty_response(period, from_ts, bucket_duration_ms, expected_bucke
     current_ts = from_ts
     
     for i in range(expected_buckets):
-        dt_object = datetime.fromtimestamp(current_ts / 1000, tz=timezone.utc)
+        dt_object = datetime.fromtimestamp(current_ts / 1000)
         data_points.append({
             "timestamp": dt_object,
             "value": 0.0
@@ -317,7 +317,7 @@ def get_last_7_days_data(db, redis_client, user_id: int):
         ]
     }
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now()
     # Calcular inicio hace exactamente 7 días (a medianoche)
     start_time = (now - timedelta(days=7)).replace(hour=0, minute=0, second=0, microsecond=0)
     start_ts = int(start_time.timestamp() * 1000)
@@ -351,7 +351,7 @@ def get_last_7_days_data(db, redis_client, user_id: int):
             for ts, value in watts_data:
                 try:
                     # Convertir timestamp a fecha (sin hora)
-                    dt = datetime.fromtimestamp(ts / 1000, tz=timezone.utc)
+                    dt = datetime.fromtimestamp(ts / 1000)
                     date_str = dt.strftime("%Y-%m-%d")
                     
                     # Guardar timestamp y valor
