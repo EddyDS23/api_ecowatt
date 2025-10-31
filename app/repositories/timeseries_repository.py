@@ -5,18 +5,20 @@ from redis import Redis
 from app.core import logger
 from typing import Dict
 
+# Cache GLOBAL (compartido entre todas las instancias del repositorio)
+_GLOBAL_CREATED_SERIES = set()
+
 class TimeSeriesRepository:
     def __init__(self, redis_client: Redis):
         self.redis = redis_client
-        self._created_series = set()  # Cache en memoria de series ya creadas
 
     def _ensure_ts_exists(self, key: str, labels: Dict):
         """
         Crea la serie de tiempo solo si no existe.
-        Usa un cache en memoria para evitar verificaciones repetidas.
+        Usa un cache GLOBAL en memoria compartido entre todas las instancias.
         """
-        # Si ya lo creamos en esta sesión, skip
-        if key in self._created_series:
+        # Si ya lo creamos en CUALQUIER instancia, skip
+        if key in _GLOBAL_CREATED_SERIES:
             return
         
         try:
