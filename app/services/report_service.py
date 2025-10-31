@@ -102,13 +102,13 @@ def generate_monthly_report(db: Session, redis_client: Redis, user_id: int, mont
 def _calculate_billing_cycle_for_month(billing_day: int, month: int, year: int) -> tuple | None:
     """Calcula las fechas de inicio y fin del ciclo de facturación para un mes específico"""
     try:
-        # Crear fecha del inicio del ciclo
+        # Crear fecha del inicio del ciclo EN UTC
         try:
-            cycle_start = datetime(year, month, billing_day, 0, 0, 0)
+            cycle_start = datetime(year, month, billing_day, 0, 0, 0, tzinfo=timezone.utc)
         except ValueError:
             # Si el día no existe en el mes (ej: 31 en febrero), usar último día del mes
             last_day = calendar.monthrange(year, month)[1]
-            cycle_start = datetime(year, month, min(billing_day, last_day), 0, 0, 0)
+            cycle_start = datetime(year, month, min(billing_day, last_day), 0, 0, 0, tzinfo=timezone.utc)
         
         # Fin del ciclo: un mes después, menos 1 segundo
         cycle_end = (cycle_start + relativedelta(months=1)) - timedelta(seconds=1)
@@ -332,7 +332,12 @@ def _get_month_alerts(db: Session, user_id: int, start_date, end_date) -> list:
     # Filtrar alertas del periodo
     month_alerts = []
     for alert in alerts:
-        if start_date <= alert.ale_created_at.replace(tzinfo=timezone.utc) <= end_date:
+        # Asegurar que la fecha tenga timezone UTC
+        alert_date = alert.ale_created_at
+        if not alert_date.tzinfo:
+            alert_date = alert_date.replace(tzinfo=timezone.utc)
+        
+        if start_date <= alert_date <= end_date:
             month_alerts.append(MonthAlert(
                 date=alert.ale_created_at,
                 title=alert.ale_title,
@@ -351,7 +356,12 @@ def _get_month_recommendations(db: Session, user_id: int, start_date, end_date) 
     # Filtrar recomendaciones del periodo
     month_recs = []
     for rec in recommendations:
-        if start_date <= rec.rec_created_at.replace(tzinfo=timezone.utc) <= end_date:
+        # Asegurar que la fecha tenga timezone UTC
+        rec_date = rec.rec_created_at
+        if not rec_date.tzinfo:
+            rec_date = rec_date.replace(tzinfo=timezone.utc)
+        
+        if start_date <= rec_date <= end_date:
             month_recs.append(MonthRecommendation(
                 date=rec.rec_created_at,
                 text=rec.rec_text
