@@ -8,20 +8,42 @@ from typing import Dict
 class TimeSeriesRepository:
     def __init__(self, redis_client: Redis):
         self.redis = redis_client
+        self._created_series = set()  # Cache en memoria de series ya creadas
 
-    def _create_ts_if_not_exists(self, key: str, labels: Dict):
-        """Función interna para crear una serie de tiempo si no existe."""
+    def _ensure_ts_exists(self, key: str, labels: Dict):
+        """
+        Crea la serie de tiempo solo si no existe.
+        Usa un cache en memoria para evitar verificaciones repetidas.
+        """
+        # Si ya lo creamos en esta sesión, skip
+        if key in self._created_series:
+            return
+        
         try:
-            # Intenta obtener información de la serie; si falla, no existe.
+            # Verificar si existe en Redis
             self.redis.ts().info(key)
+            # Si llegamos aquí, la serie ya existe
+            self._created_series.add(key)
+            logger.debug(f"Serie ya existente detectada: {key}")
         except Exception:
-            self.redis.ts().create(key, labels=labels)
-            logger.info(f"Serie de tiempo creada: {key}")
+            # No existe, intentar crear
+            try:
+                self.redis.ts().create(key, labels=labels)
+                self._created_series.add(key)
+                logger.info(f"Serie de tiempo creada: {key}")
+            except Exception as e:
+                # Posible race condition: otra instancia la creó justo ahora
+                # Intentar agregarla al cache de todas formas
+                try:
+                    self.redis.ts().info(key)
+                    self._created_series.add(key)
+                except Exception:
+                    logger.error(f"No se pudo crear ni verificar la serie {key}: {e}")
 
     def add_measurements(self, user_id: int, device_id: str, watts: float, volts: float, amps: float):
         """
         Guarda las mediciones de un dispositivo en Redis con timestamp.
-        Soporta RedisTimeSeries (si está habilitado); si no, usa un ZSET como fallback.
+        Soporta RedisTimeSeries (recomendado). Si no está, usa un ZSET como fallback.
         """
         timestamp = int(datetime.now(timezone.utc).timestamp() * 1000)  # siempre en milisegundos
         key_watts = f"ts:user:{user_id}:device:{device_id}:watts"
@@ -31,25 +53,24 @@ class TimeSeriesRepository:
         try:
             # Si tienes módulo RedisTimeSeries disponible
             if hasattr(self.redis, "ts"):
-                # Crear series si no existen
-                for key, label in [
-                    (key_watts, "watts"),
-                    (key_volts, "volts"),
-                    (key_amps, "amps"),
-                ]:
-                    try:
-                        self.redis.ts().create(
-                            key,
-                            labels={
-                                "user_id": str(user_id),
-                                "device_id": str(device_id),
-                                "type": label,
-                            },
-                        )
-                    except Exception:
-                        # ya existe, lo ignoramos
-                        pass
+                # Asegurar que las series existen (solo la primera vez por serie)
+                self._ensure_ts_exists(key_watts, {
+                    "user_id": str(user_id),
+                    "device_id": str(device_id),
+                    "type": "watts"
+                })
+                self._ensure_ts_exists(key_volts, {
+                    "user_id": str(user_id),
+                    "device_id": str(device_id),
+                    "type": "volts"
+                })
+                self._ensure_ts_exists(key_amps, {
+                    "user_id": str(user_id),
+                    "device_id": str(device_id),
+                    "type": "amps"
+                })
 
+                # Insertar los datos usando pipeline para eficiencia
                 pipe = self.redis.ts().pipeline()
                 pipe.add(key_watts, timestamp, watts)
                 pipe.add(key_volts, timestamp, volts)
@@ -65,4 +86,4 @@ class TimeSeriesRepository:
                 pipe.execute()
 
         except Exception as e:
-            print(f"❌ Error al guardar datos en Redis: {e}")
+            logger.error(f"❌ Error al guardar datos en Redis: {e}")
