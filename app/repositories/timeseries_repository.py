@@ -25,20 +25,21 @@ class TimeSeriesRepository:
             # Verificar si existe en Redis
             self.redis.ts().info(key)
             # Si llegamos aquí, la serie ya existe
-            self._created_series.add(key)
-            logger.debug(f"Serie ya existente detectada: {key}")
+            _GLOBAL_CREATED_SERIES.add(key)
+            logger.debug(f"Serie ya existente: {key}")
+            return  # ✅ IMPORTANTE: Salir aquí, no intentar crear
         except Exception:
             # No existe, intentar crear
             try:
                 self.redis.ts().create(key, labels=labels)
-                self._created_series.add(key)
+                _GLOBAL_CREATED_SERIES.add(key)
                 logger.info(f"Serie de tiempo creada: {key}")
             except Exception as e:
                 # Posible race condition: otra instancia la creó justo ahora
                 # Intentar agregarla al cache de todas formas
                 try:
                     self.redis.ts().info(key)
-                    self._created_series.add(key)
+                    _GLOBAL_CREATED_SERIES.add(key)
                 except Exception:
                     logger.error(f"No se pudo crear ni verificar la serie {key}: {e}")
 
