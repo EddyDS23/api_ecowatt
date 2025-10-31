@@ -58,19 +58,22 @@ def get_history_data(db: Session, redis_client: Redis, user_id: int, period: His
             # aggregated_data is list of [timestamp, value]
             data_points = []
             for ts, value in aggregated_data:
-                if value is None:
-                    # bucket sin datos
-                    data_points.append({"timestamp": datetime.fromtimestamp(ts / 1000, tz=timezone.utc), "value": 0.0})
-                    continue
-                # ts está en ms desde epoch
                 dt_object = datetime.fromtimestamp(ts / 1000, tz=timezone.utc)
-                avg_power_watts = float(value)
-                # convertir W (promedio instantáneo) a kWh según duración del bucket:
-                # kWh = W * (bucket_seconds / 3600) / 1000? 
-                # ---- En realidad: W es potencia, kWh = W * hours / 1000
+    
+                # Manejar valores None (buckets sin datos)
+                if value is None:
+                    avg_power_watts = 0.0
+                else:
+                    avg_power_watts = float(value)
+    
+                # Convertir W promedio a kWh basado en duración del bucket
                 bucket_hours = (bucket_duration_ms / 1000) / 3600.0
-                kwh_value = (avg_power_watts * bucket_hours) / 1000.0  # si watts estaban en W y queremos kWh
-                data_points.append({"timestamp": dt_object, "value": round(kwh_value, 6)})
+                kwh_value = (avg_power_watts * bucket_hours) / 1000.0
+    
+                data_points.append({
+                    "timestamp": dt_object.isoformat(),  # ✅ Formato ISO8601 para frontend
+                    "value": round(kwh_value, 6)
+                })
 
             # Si quieres garantizar N puntos fijos (por ejemplo 7 días), construir buckets con ceros
             # y mapear los resultados en ellos. Aquí devolvemos los buckets realmente devueltos por TS.
@@ -172,9 +175,16 @@ def get_last_7_days_data(db, redis_client, user_id: int):
         watts_list.append(sum(measures["watts"]) / len(measures["watts"]) if measures["watts"] else 0)
         volts_list.append(sum(measures["volts"]) / len(measures["volts"]) if measures["volts"] else 0)
         amps_list.append(sum(measures["amps"]) / len(measures["amps"]) if measures["amps"] else 0)
+    
+    labels_iso = [
+    datetime.strptime(date, "%Y-%m-%d")
+    .replace(tzinfo=timezone.utc)
+    .isoformat() 
+    for date in labels
+]
 
     return {
-        "labels": labels,
+        "labels": labels_iso,
         "watts": watts_list,
         "volts": volts_list,
         "amps": amps_list

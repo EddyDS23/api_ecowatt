@@ -1,7 +1,7 @@
 # app/services/dashboard_service.py
 from sqlalchemy.orm import Session
 from redis import Redis
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from dateutil.relativedelta import relativedelta
 from app.repositories import TarrifRepository, UserRepository, RecommendationRepository
 from app.core import logger, settings
@@ -16,24 +16,24 @@ def get_dashboard_summary(db: Session, redis_client: Redis, user_id: int):
             return {"error": "Usuario no encontrado."}
         logger.info(f"Usuario encontrado: {user.user_name}, tarifa: {user.user_trf_rate}")
 
-        # 2️⃣ Fechas del ciclo de facturación (hora LOCAL)
-        now_local = datetime.now()
+        # 2️⃣ Fechas del ciclo de facturación (ahora en UTC)
+        now_utc = datetime.now(timezone.utc)
         billing_day = user.user_billing_day
         try:
-            if now_local.day >= billing_day:
-                start_date = now_local.replace(day=billing_day, hour=0, minute=0, second=0, microsecond=0)
+            if now_utc.day >= billing_day:
+                start_date = now_utc.replace(day=billing_day, hour=0, minute=0, second=0, microsecond=0)
             else:
-                start_date = (now_local - relativedelta(months=1)).replace(day=billing_day, hour=0, minute=0, second=0, microsecond=0)
+                start_date = (now_utc - relativedelta(months=1)).replace(day=billing_day, hour=0, minute=0, second=0, microsecond=0)
         except ValueError as ve:
-            last_day_prev_month = (now_local.replace(day=1) - timedelta(days=1))
-            start_date = last_day_prev_month.replace(day=billing_day) if now_local.day < billing_day else now_local.replace(day=billing_day)
+            last_day_prev_month = (now_utc.replace(day=1) - timedelta(days=1))
+            start_date = last_day_prev_month.replace(day=billing_day) if now_utc.day < billing_day else now_utc.replace(day=billing_day)
             logger.warning(f"Error ajustando start_date: {ve}, usando {start_date}")
 
         end_date = (start_date + relativedelta(months=1)) - timedelta(seconds=1)
 
         start_ts = int(start_date.timestamp() * 1000)
-        end_ts = int(now_local.timestamp() * 1000)
-        logger.info(f"Rango Redis calculado: {start_ts} → {end_ts} ({start_date} → {now_local})")
+        end_ts = int(now_utc.timestamp() * 1000)
+        logger.info(f"Rango Redis calculado: {start_ts} → {end_ts} ({start_date} → {now_utc})")
 
         # 3️⃣ Seleccionar dispositivo activo
         active_device = next((d for d in user.devices if d.dev_status), None)
@@ -77,7 +77,7 @@ def get_dashboard_summary(db: Session, redis_client: Redis, user_id: int):
         estimated_cost = 0.0
         kwh_remaining = total_kwh
         tariff_repo = TarrifRepository(db)
-        tariffs = tariff_repo.get_tariffs_for_date(user.user_trf_rate, now_local.date())
+        tariffs = tariff_repo.get_tariffs_for_date(user.user_trf_rate, now_utc.date())
         if not tariffs:
             logger.error(f"No se encontraron tarifas para {user.user_trf_rate}")
             return {"error": f"No se encontraron tarifas para '{user.user_trf_rate}'."}
@@ -112,7 +112,7 @@ def get_dashboard_summary(db: Session, redis_client: Redis, user_id: int):
             "estimated_cost_mxn": round(estimated_cost, 2),
             "billing_cycle_start": start_date.date(),
             "billing_cycle_end": end_date.date(),
-            "days_in_cycle": (now_local.date() - start_date.date()).days,
+            "days_in_cycle": (now_utc.date() - start_date.date()).days,
             "current_tariff": user.user_trf_rate,
             "carbon_footprint": {
                 "co2_emitted_kg": round(co2, 2),
