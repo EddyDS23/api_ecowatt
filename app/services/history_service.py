@@ -8,13 +8,6 @@ from app.schemas import HistoryPeriod
 from collections import defaultdict
 
 def get_history_data(db: Session, redis_client: Redis, user_id: int, period: HistoryPeriod):
-    """
-    Devuelve data_points agrupados para el periodo pedido:
-     - daily  -> últimos 24h, bucket = 1 hora  (24 puntos)
-     - weekly -> últimos 7d,  bucket = 1 día   (7  puntos)
-     - monthly-> últimos 30d, bucket = 1 día   (30 puntos)
-    Soporta RedisTimeSeries (recomendado). Si no está, intenta leer desde ZSET fallback.
-    """
     user_repo = UserRepository(db)
     user = user_repo.get_user_id_repository(user_id)
     if not user or not getattr(user, "devices", None):
@@ -25,106 +18,47 @@ def get_history_data(db: Session, redis_client: Redis, user_id: int, period: His
         return None
 
     watts_key = f"ts:user:{user_id}:device:{active_device.dev_id}:watts"
-
     now_dt = datetime.now(timezone.utc)
     now_ts = int(now_dt.timestamp() * 1000)
 
-    # Configuración de buckets
     if period == HistoryPeriod.DAILY:
         from_dt = now_dt - timedelta(hours=24)
-        bucket_duration_ms = 60 * 60 * 1000  # 1 hora
+        bucket_duration_ms = 3600000
     elif period == HistoryPeriod.WEEKLY:
         from_dt = now_dt - timedelta(days=7)
-        bucket_duration_ms = 24 * 60 * 60 * 1000  # 1 día
+        bucket_duration_ms = 86400000
     elif period == HistoryPeriod.MONTHLY:
         from_dt = now_dt - timedelta(days=30)
-        bucket_duration_ms = 24 * 60 * 60 * 1000  # 1 día
+        bucket_duration_ms = 86400000
     else:
         return None
 
     from_ts = int(from_dt.timestamp() * 1000)
 
     try:
-        # Intentamos usar RedisTimeSeries (módulo TS)
-        if hasattr(redis_client, "ts"):
-            # ts().range with aggregation
-            aggregated_data = redis_client.ts().range(
-                watts_key,
-                from_time=from_ts,
-                to_time=now_ts,
-                aggregation_type="avg",
-                bucket_size_msec=bucket_duration_ms
-            )
-            # aggregated_data is list of [timestamp, value]
-            data_points = []
-            for ts, value in aggregated_data:
-                dt_object = datetime.fromtimestamp(ts / 1000, tz=timezone.utc)
-    
-                # Manejar valores None (buckets sin datos)
-                if value is None:
-                    avg_power_watts = 0.0
-                else:
-                    avg_power_watts = float(value)
-    
-                # Convertir W promedio a kWh basado en duración del bucket
-                bucket_hours = (bucket_duration_ms / 1000) / 3600.0
-                kwh_value = (avg_power_watts * bucket_hours) / 1000.0
-    
-                data_points.append({
-                    "timestamp": dt_object.isoformat(),  # ✅ Formato ISO8601 para frontend
-                    "value": round(kwh_value, 6)
-                })
+        if not redis_client.exists(watts_key):
+            return None
 
-            # Si quieres garantizar N puntos fijos (por ejemplo 7 días), construir buckets con ceros
-            # y mapear los resultados en ellos. Aquí devolvemos los buckets realmente devueltos por TS.
-            return {"period": period.value, "data_points": data_points}
+        raw_result = redis_client.execute_command(
+            'TS.RANGE', watts_key, from_ts, now_ts,
+            'ALIGN', 'start', 'AGGREGATION', 'avg', bucket_duration_ms
+        )
 
-        else:
-            # Fallback: si no tienes RedisTimeSeries, asumimos que guardaste con ZADD (score=timestamp_ms)
-            raw = redis_client.zrangebyscore(watts_key, from_ts, now_ts, withscores=True)
-            # raw = [(value, score_ms), ...]
-            # convertimos y agrupamos por bucket manually
-            buckets = {}
-            # crear buckets vacíos
-            n_buckets = int((now_ts - from_ts) / bucket_duration_ms) + 1
-            for i in range(n_buckets):
-                bucket_start = from_ts + i * bucket_duration_ms
-                buckets[bucket_start] = {"sum": 0.0, "count": 0}
+        data_points = []
+        for item in raw_result:
+            ts = int(item[0])
+            value = float(item[1]) if item[1] is not None else 0.0
+            dt_object = datetime.fromtimestamp(ts / 1000, tz=timezone.utc)
+            bucket_hours = (bucket_duration_ms / 1000) / 3600.0
+            kwh_value = (value * bucket_hours) / 1000.0
+            data_points.append({
+                "timestamp": dt_object.isoformat(),
+                "value": round(kwh_value, 6)
+            })
 
-            for val, score in raw:
-                # score puede venir en float/int; val puede estar serializado
-                try:
-                    v = float(val)
-                except Exception:
-                    # si el valor es JSON con {"watts":...}
-                    try:
-                        import json
-                        v = float(json.loads(val).get("watts", 0))
-                    except Exception:
-                        v = 0.0
-                # ubicar bucket
-                relative = int((score - from_ts) // bucket_duration_ms)
-                bucket_start = from_ts + relative * bucket_duration_ms
-                if bucket_start not in buckets:
-                    buckets[bucket_start] = {"sum": 0.0, "count": 0}
-                buckets[bucket_start]["sum"] += v
-                buckets[bucket_start]["count"] += 1
-
-            data_points = []
-            for bucket_start, agg in sorted(buckets.items()):
-                ts = bucket_start
-                if agg["count"] == 0:
-                    data_points.append({"timestamp": datetime.fromtimestamp(ts / 1000, tz=timezone.utc), "value": 0.0})
-                else:
-                    avg_power_watts = agg["sum"] / agg["count"]
-                    bucket_hours = (bucket_duration_ms / 1000) / 3600.0
-                    kwh_value = (avg_power_watts * bucket_hours) / 1000.0
-                    data_points.append({"timestamp": datetime.fromtimestamp(ts / 1000, tz=timezone.utc), "value": round(kwh_value, 6)})
-
-            return {"period": period.value, "data_points": data_points}
-
+        return {"period": period.value, "unit": "kWh", "data_points": data_points}
     except Exception as e:
-        logger.error(f"Error al obtener datos históricos de Redis para {watts_key}: {e}")
+        logger.exception(f"❌ Error: {e}")
         return None
 
 
