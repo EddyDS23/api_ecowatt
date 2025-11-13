@@ -80,16 +80,24 @@ def register_fcm_token_service(db: Session, dev_id: int, user_id: int, dev_fcm_d
 
     # Verificar si el dispositivo existe y pertenece al usuario
     if not device_to_update or device_to_update.dev_user_id != user_id:
-        logger.warning(f"Usuario {user_id} intentó registrar token FCM para dispositivo {dev_id} no autorizado o inexistente.")
+        logger.warning(
+            f"Usuario {user_id} intentó registrar token FCM para dispositivo {dev_id} "
+            "no autorizado o inexistente."
+        )
         return False
 
-    # Actualizar el token usando el repositorio
-    # Usamos la función update_device_repository que ya existe y puede actualizar cualquier campo
-    updated_device = device_repo.update_device_repository(dev_id, {"dev_fcm_token": dev_fcm_data.fcm_token})
+    # Actualizar el token
+    updated_device = device_repo.update_device_repository(
+        dev_id, 
+        {"dev_fcm_token": dev_fcm_data.fcm_token}
+    )
 
     if updated_device:
-        logger.info(f"Token FCM actualizado para dispositivo {dev_id} del usuario {user_id}.")
+        logger.info(
+            f"✅ Token FCM actualizado para dispositivo {dev_id} del usuario {user_id}. "
+            f"Token: {dev_fcm_data.fcm_token[:20]}...{dev_fcm_data.fcm_token[-10:]}"
+        )
         return True
     else:
-        logger.error(f"No se pudo actualizar el token FCM para dispositivo {dev_id}.")
+        logger.error(f"❌ No se pudo actualizar el token FCM para dispositivo {dev_id}.")
         return False
