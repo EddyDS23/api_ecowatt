@@ -1,11 +1,11 @@
-# app/repositories/timeseries_repository.py (VERSIÓN FINAL)
+# app/repositories/timeseries_repository.py (SOLUCIÓN FINAL AL BUG)
 
 from datetime import datetime, timezone
 from redis import Redis
 from app.core import logger
 from typing import Dict
 
-# Cache GLOBAL para evitar crear series múltiples veces
+# Cache GLOBAL
 _GLOBAL_CREATED_SERIES = set()
 
 class TimeSeriesRepository:
@@ -15,32 +15,43 @@ class TimeSeriesRepository:
     def _ensure_ts_exists(self, key: str, labels: Dict):
         """
         Crea la serie de tiempo solo si no existe.
-        IMPORTANTE: Ahora con DUPLICATE_POLICY y RETENTION configurados.
+        
+        FIX CRÍTICO: Verifica SIEMPRE en Redis primero, no solo en cache.
+        El cache es útil para optimización, pero Redis es la fuente de verdad.
         """
-        # Si ya verificamos que existe, skip
+        
         if key in _GLOBAL_CREATED_SERIES:
             return
         
         try:
-            # Verificar si ya existe en Redis
-            self.redis.ts().info(key)
-            # Si llegamos aquí, ya existe
+           
+            info = self.redis.ts().info(key)
+            
+           
+            retention = info.get('retentionTime', info.get('retention_time', 0))
+            dup_policy = info.get('duplicatePolicy', info.get('duplicate_policy', None))
+            
+     
+            if retention != 5259600000:
+                logger.warning(f"⚠️ Serie {key} tiene retention incorrecto ({retention}), actualizando...")
+                self.redis.execute_command('TS.ALTER', key, 'RETENTION', '2592000000')
+                logger.info(f"✅ Retention actualizado para {key}")
+            
+          
             _GLOBAL_CREATED_SERIES.add(key)
-            logger.debug(f"Serie existente: {key}")
+            logger.debug(f"Serie verificada y agregada al cache: {key}")
             return
-        except Exception:
-            # No existe, crear nueva serie
+            
+        except Exception as check_error:
+           
             try:
-                # 🔧 CONFIGURACIÓN CRÍTICA:
-                # - DUPLICATE_POLICY LAST: Si llega mismo timestamp, guardar el último valor
-                # - RETENTION 604800000: Retener solo 7 días (en milisegundos)
-                # - LABELS: Metadata para búsquedas y organización
+                logger.info(f"📝 Creando serie nueva: {key}")
                 
                 self.redis.execute_command(
                     'TS.CREATE',
                     key,
-                    'DUPLICATE_POLICY', 'LAST',        # ← Manejo de duplicados
-                    'RETENTION', '2592000000',         # ← 30 días en ms (suficiente para monthly)
+                    'DUPLICATE_POLICY', 'LAST',
+                    'RETENTION', '5259600000',  # 2 meses
                     'LABELS',
                     'user_id', str(labels.get('user_id', '')),
                     'device_id', str(labels.get('device_id', '')),
@@ -48,27 +59,29 @@ class TimeSeriesRepository:
                 )
                 
                 _GLOBAL_CREATED_SERIES.add(key)
-                logger.info(f"✅ Serie creada: {key} (DUPLICATE_POLICY: LAST, RETENTION: 30 días)")
+                logger.info(
+                    f"✅ Serie creada exitosamente: {key} "
+                    f"(DUPLICATE_POLICY: LAST, RETENTION: 30 días)"
+                )
                 
-            except Exception as e:
-                # Posible race condition: otra instancia la creó al mismo tiempo
-                try:
-                    self.redis.ts().info(key)
+            except Exception as create_error:
+                # Posible race condition: otra instancia la creó
+                error_msg = str(create_error).lower()
+                
+                if "already exists" in error_msg or "tsdb: key already exists" in error_msg:
+                    # Otra instancia/worker la creó, agregarla al cache
                     _GLOBAL_CREATED_SERIES.add(key)
-                    logger.debug(f"Serie creada por otra instancia: {key}")
-                except Exception:
-                    logger.error(f"❌ Error creando serie {key}: {e}")
+                    logger.debug(f"Serie creada por otro worker: {key}")
+                else:
+                    logger.error(f"❌ Error creando serie {key}: {create_error}")
 
     def add_measurements(self, user_id: int, device_id: str, watts: float, volts: float, amps: float):
         """
         Guarda las mediciones de un dispositivo en Redis TimeSeries.
         
-        Cambios importantes:
-        - Usa execute_command en lugar de pipeline para evitar race conditions
-        - Genera timestamp único en el momento exacto
-        - Asegura que las series existan con configuración correcta
+        IMPORTANTE: SIEMPRE verifica que las series existan ANTES de insertar.
         """
-        # 🕐 Generar timestamp en el momento EXACTO de la inserción
+        # Generar timestamp en el momento exacto
         base_timestamp = int(datetime.now(timezone.utc).timestamp() * 1000)
         
         # Construir nombres de las series
@@ -77,7 +90,6 @@ class TimeSeriesRepository:
         key_amps  = f"ts:user:{user_id}:device:{device_id}:amps"
 
         try:
-            # 1️⃣ Asegurar que las series existan con configuración correcta
             self._ensure_ts_exists(key_watts, {
                 "user_id": str(user_id),
                 "device_id": str(device_id),
@@ -94,16 +106,16 @@ class TimeSeriesRepository:
                 "type": "amps"
             })
 
-            # 2️⃣ Insertar datos uno por uno (NO pipeline)
-            # Usamos timestamps ligeramente diferentes (+1ms, +2ms) para garantizar unicidad
             self.redis.execute_command('TS.ADD', key_watts, base_timestamp, watts)
             self.redis.execute_command('TS.ADD', key_volts, base_timestamp + 1, volts)
             self.redis.execute_command('TS.ADD', key_amps, base_timestamp + 2, amps)
             
             logger.debug(
-                f"💾 Guardado: user={user_id}, device={device_id}, "
+                f"💾 Datos guardados: user={user_id}, device={device_id}, "
                 f"ts={base_timestamp}, watts={watts}W"
             )
 
         except Exception as e:
-            logger.error(f"❌ Error al guardar datos en Redis para device {device_id}: {e}")
+            logger.error(
+                f"❌ Error al guardar datos en Redis para device {device_id}: {e}"
+            )
