@@ -147,14 +147,15 @@ class TimeSeriesRepository:
                 "type": "amps"
             })
 
-            # ✅ Insertar datos
-            self.redis.execute_command('TS.ADD', key_watts, base_timestamp, watts)
-            self.redis.execute_command('TS.ADD', key_volts, base_timestamp + 1, volts)
-            self.redis.execute_command('TS.ADD', key_amps, base_timestamp + 2, amps)
-            
+            self.redis.execute_command(
+                'TS.MADD',
+                key_watts, base_timestamp, watts,
+                key_volts, base_timestamp + 1, volts,
+                key_amps,  base_timestamp + 2, amps
+            )
+
             logger.debug(
-                f"💾 Datos guardados: user={user_id}, device={device_id}, "
-                f"ts={base_timestamp}, watts={watts}W"
+                f"💾 Datos guardados via TS.MADD: user={user_id}, device={device_id}, ts={base_timestamp}"
             )
 
         except Exception as e:
