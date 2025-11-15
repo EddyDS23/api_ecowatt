@@ -20,9 +20,8 @@ class TimeSeriesRepository:
         Crea la serie de tiempo solo si no existe.
         
         🔥 FIX CRÍTICO:
-        1. USA UNA SOLA CONSTANTE para retention (no compara con valores diferentes)
-        2. NO altera series existentes (evita resetear chunks)
-        3. Solo verifica una vez por sesión (cache global)
+        - Orden correcto de parámetros TS.CREATE
+        - RETENTION y DUPLICATE_POLICY antes de LABELS
         """
         
         # Si ya verificamos esta serie en esta sesión, saltamos
@@ -33,14 +32,39 @@ class TimeSeriesRepository:
             # Verificar si la serie existe en Redis
             info = self.redis.ts().info(key)
             
-            # ✅ Serie existe, solo la agregamos al cache
+            # ✅ Serie existe, validar configuración
+            current_retention = info.get('retentionTime', 0)
+            current_dup_policy = info.get('duplicatePolicy')
+            
+            # 🔥 FIX: Si la configuración está incorrecta, alertar
+            if current_retention != RETENTION_MS or current_dup_policy != 'last':
+                logger.warning(
+                    f"⚠️ Serie {key} tiene configuración incorrecta: "
+                    f"retention={current_retention} (esperado: {RETENTION_MS}), "
+                    f"dup_policy={current_dup_policy} (esperado: last)"
+                )
+                
+                # Intentar corregir con TS.ALTER
+                try:
+                    if current_retention != RETENTION_MS:
+                        self.redis.execute_command(
+                            'TS.ALTER', key, 
+                            'RETENTION', str(RETENTION_MS)
+                        )
+                        logger.info(f"✅ Retention corregido para {key}")
+                    
+                    if current_dup_policy != 'last':
+                        self.redis.execute_command(
+                            'TS.ALTER', key,
+                            'DUPLICATE_POLICY', 'LAST'
+                        )
+                        logger.info(f"✅ Duplicate policy corregido para {key}")
+                        
+                except Exception as alter_error:
+                    logger.error(f"❌ No se pudo corregir configuración de {key}: {alter_error}")
+            
             _GLOBAL_CREATED_SERIES.add(key)
             logger.debug(f"✅ Serie verificada: {key}")
-            
-            # 🔥 FIX: NO ALTERAR SERIES EXISTENTES
-            # Comentamos la lógica de TS.ALTER porque resetea chunks
-            # Si necesitas cambiar retention, hazlo manualmente con Redis CLI
-            
             return
             
         except Exception as check_error:
@@ -48,29 +72,46 @@ class TimeSeriesRepository:
             try:
                 logger.info(f"📝 Creando nueva serie: {key}")
                 
-                # ✅ Crear con retention consistente
+                # 🔥 FIX CRÍTICO: ORDEN CORRECTO DE PARÁMETROS
+                # En RedisTimeSeries, el orden ES IMPORTANTE:
+                # TS.CREATE key [RETENTION ms] [ENCODING <encoding>] [CHUNK_SIZE size] 
+                #           [DUPLICATE_POLICY policy] [LABELS label value...]
+                
                 self.redis.execute_command(
-                    'TS.CREATE',
-                    key,
-                    'DUPLICATE_POLICY', 'LAST',
-                    'RETENTION', str(RETENTION_MS),  # Usa la constante
-                    'LABELS',
+                    'TS.CREATE', key,
+                    'RETENTION', str(RETENTION_MS),          # ✅ PRIMERO
+                    'DUPLICATE_POLICY', 'LAST',              # ✅ SEGUNDO
+                    'LABELS',                                # ✅ AL FINAL
                     'user_id', str(labels.get('user_id', '')),
                     'device_id', str(labels.get('device_id', '')),
                     'type', str(labels.get('type', ''))
                 )
                 
                 _GLOBAL_CREATED_SERIES.add(key)
+                
+                # Verificar que se creó correctamente
+                verify_info = self.redis.ts().info(key)
+                verify_retention = verify_info.get('retentionTime', 0)
+                verify_dup_policy = verify_info.get('duplicatePolicy')
+                
                 logger.info(
-                    f"✅ Serie creada: {key} "
-                    f"(RETENTION: {RETENTION_MS}ms = 30 días, DUPLICATE_POLICY: LAST)"
+                    f"✅ Serie creada: {key}\n"
+                    f"   - RETENTION: {verify_retention}ms ({verify_retention / 86400000:.1f} días)\n"
+                    f"   - DUPLICATE_POLICY: {verify_dup_policy}"
                 )
+                
+                # Validar que se creó con la config correcta
+                if verify_retention != RETENTION_MS:
+                    logger.error(
+                        f"❌ ADVERTENCIA: Serie creada con retention incorrecto: "
+                        f"{verify_retention} (esperado: {RETENTION_MS})"
+                    )
                 
             except Exception as create_error:
                 error_msg = str(create_error).lower()
                 
                 if "already exists" in error_msg or "tsdb: key already exists" in error_msg:
-                    # Otra instancia/worker la creó (race condition normal en multi-worker)
+                    # Otra instancia la creó (race condition normal)
                     _GLOBAL_CREATED_SERIES.add(key)
                     logger.debug(f"✅ Serie creada por otro worker: {key}")
                 else:
@@ -79,11 +120,6 @@ class TimeSeriesRepository:
     def add_measurements(self, user_id: int, device_id: str, watts: float, volts: float, amps: float):
         """
         Guarda las mediciones de un dispositivo en Redis TimeSeries.
-        
-        🔥 OPTIMIZADO:
-        - Usa timestamps UTC actuales
-        - Verifica series una sola vez por sesión
-        - Timestamps incrementales para evitar duplicados
         """
         # Generar timestamp UTC actual
         base_timestamp = int(datetime.now(timezone.utc).timestamp() * 1000)
@@ -94,7 +130,7 @@ class TimeSeriesRepository:
         key_amps  = f"ts:user:{user_id}:device:{device_id}:amps"
 
         try:
-            # ✅ Asegurar que las series existan (solo primera vez)
+            # ✅ Asegurar que las series existan con la config correcta
             self._ensure_ts_exists(key_watts, {
                 "user_id": str(user_id),
                 "device_id": str(device_id),
@@ -111,7 +147,7 @@ class TimeSeriesRepository:
                 "type": "amps"
             })
 
-            # ✅ Insertar datos (timestamps incrementales para evitar duplicados)
+            # ✅ Insertar datos
             self.redis.execute_command('TS.ADD', key_watts, base_timestamp, watts)
             self.redis.execute_command('TS.ADD', key_volts, base_timestamp + 1, volts)
             self.redis.execute_command('TS.ADD', key_amps, base_timestamp + 2, amps)
