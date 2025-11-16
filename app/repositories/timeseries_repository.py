@@ -36,16 +36,20 @@ class TimeSeriesRepository:
             current_dup_policy = info.duplicate_policy
             
             # Verificar configuración correcta
+            # Redis puede devolver bytes (b'last') o string ('last') según versión/configuración
             config_is_correct = (
                 current_retention == RETENTION_MS and 
-                current_dup_policy == b'last'  # Redis devuelve bytes
+                current_dup_policy in (b'last', 'last')
             )
             
             if not config_is_correct:
+                # Convertir a string para mostrar correctamente
+                dup_policy_str = current_dup_policy.decode() if isinstance(current_dup_policy, bytes) else current_dup_policy
+                
                 logger.error(
                     f"❌ CONFIGURACIÓN INCORRECTA: {key}\n"
                     f"   • Retention actual: {current_retention}ms (esperado: {RETENTION_MS}ms)\n"
-                    f"   • Duplicate Policy: {current_dup_policy} (esperado: b'last')\n"
+                    f"   • Duplicate Policy: {dup_policy_str} (esperado: last)\n"
                     f"   • ACCIÓN: Eliminar y recrear manualmente:\n"
                     f"     sudo docker exec ecowatt-redis redis-cli DEL {key}"
                 )
@@ -97,11 +101,13 @@ class TimeSeriesRepository:
                         f"   • Obtenido: {verify_retention}ms"
                     )
                 
-                if verify_dup_policy != b'last':
+                # Convertir a string para comparar
+                verify_dup_str = verify_dup_policy.decode() if isinstance(verify_dup_policy, bytes) else verify_dup_policy
+                if verify_dup_str != 'last':
                     logger.error(
                         f"❌ ADVERTENCIA: Duplicate policy incorrecto\n"
                         f"   • Esperado: last\n"
-                        f"   • Obtenido: {verify_dup_policy}"
+                        f"   • Obtenido: {verify_dup_str}"
                     )
                 
             except Exception as create_error:
