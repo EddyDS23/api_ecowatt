@@ -1,12 +1,9 @@
-# app/repositories/timeseries_repository.py (VERSIÓN SEGURA - SIN TS.ALTER)
+# app/repositories/timeseries_repository.py (MULTI-WORKER SAFE)
 
 from datetime import datetime, timezone
 from redis import Redis
 from app.core import logger
 from typing import Dict
-
-# Cache GLOBAL para evitar verificaciones repetidas
-_GLOBAL_CREATED_SERIES = set()
 
 # ✅ CONSTANTE ÚNICA para retention (30 días en milisegundos)
 RETENTION_MS = 2592000000  # 30 días
@@ -19,119 +16,111 @@ class TimeSeriesRepository:
         """
         Crea la serie de tiempo solo si no existe.
         
-        🔥 REGLAS CRÍTICAS:
-        1. Si la serie NO existe → Se crea con configuración correcta
-        2. Si la serie existe con config incorrecta → Solo ALERTA (NO modifica)
-        3. Si la serie existe con config correcta → La agrega al cache
+        🔥 CAMBIO CRÍTICO:
+        - NO usa cache local (eliminado _GLOBAL_CREATED_SERIES)
+        - SIEMPRE verifica en Redis directamente
+        - Compatible con múltiples workers de Gunicorn/Uvicorn
         
-        ⚠️ NO usa TS.ALTER para evitar reseteo de chunks y pérdida de datos.
+        ⚠️ Cada llamada hace TS.INFO, pero Redis es tan rápido (~1ms)
+           que el overhead es insignificante vs la robustez ganada.
         """
         
-        # Si ya verificamos esta serie en esta sesión, saltamos
-        if key in _GLOBAL_CREATED_SERIES:
-            return
-        
         try:
-            # Verificar si la serie existe en Redis
+            # ✅ SIEMPRE verificar en Redis (fuente de verdad)
             info = self.redis.ts().info(key)
             
-            # Serie existe, validar configuración
-            current_retention = info.get('retentionTime', 0)
-            current_dup_policy = info.get('duplicatePolicy')
+            # ✅ Serie existe, validar configuración
+            # FIX: info es un objeto TSInfo, no un dict
+            # Acceder a propiedades directamente
+            current_retention = info.retention_msecs
+            current_dup_policy = info.duplicate_policy
             
-            # Verificar si la configuración es correcta
+            # Verificar configuración correcta
             config_is_correct = (
                 current_retention == RETENTION_MS and 
-                current_dup_policy == 'last'
+                current_dup_policy == b'last'  # Redis devuelve bytes
             )
             
             if not config_is_correct:
-                # 🚨 ALERTA: Configuración incorrecta detectada
                 logger.error(
-                    f"❌ CONFIGURACIÓN INCORRECTA EN SERIE EXISTENTE: {key}\n"
-                    f"   ┌─ Configuración Actual:\n"
-                    f"   │  • Retention: {current_retention}ms ({current_retention / 86400000:.1f} días)\n"
-                    f"   │  • Duplicate Policy: {current_dup_policy}\n"
-                    f"   ├─ Configuración Esperada:\n"
-                    f"   │  • Retention: {RETENTION_MS}ms (30 días)\n"
-                    f"   │  • Duplicate Policy: last\n"
-                    f"   └─ ACCIÓN REQUERIDA:\n"
-                    f"      1. Detener el backend: sudo systemctl stop ecowatt\n"
-                    f"      2. Eliminar la serie: sudo docker exec ecowatt-redis redis-cli DEL {key}\n"
-                    f"      3. Reiniciar backend: sudo systemctl start ecowatt\n"
-                    f"      4. La serie se recreará automáticamente con configuración correcta"
+                    f"❌ CONFIGURACIÓN INCORRECTA: {key}\n"
+                    f"   • Retention actual: {current_retention}ms (esperado: {RETENTION_MS}ms)\n"
+                    f"   • Duplicate Policy: {current_dup_policy} (esperado: b'last')\n"
+                    f"   • ACCIÓN: Eliminar y recrear manualmente:\n"
+                    f"     sudo docker exec ecowatt-redis redis-cli DEL {key}"
                 )
-                # ⚠️ IMPORTANTE: NO intentamos corregir con TS.ALTER
-                # Razón: TS.ALTER puede causar pérdida de datos y reseteo de chunks
             else:
-                # ✅ Configuración correcta
-                logger.debug(f"✅ Serie verificada con configuración correcta: {key}")
+                logger.debug(f"✅ Serie verificada: {key}")
             
-            # Agregar al cache para no verificar de nuevo en esta sesión
-            _GLOBAL_CREATED_SERIES.add(key)
-            return
+            return  # Serie existe, no hacer nada más
             
         except Exception as check_error:
-            # Serie NO existe, la creamos con configuración correcta
+            # Serie NO existe o hubo error al verificar
+            error_msg = str(check_error).lower()
+            
+            # Si el error NO es "no existe", loggearlo
+            if "key does not exist" not in error_msg and "no such key" not in error_msg:
+                logger.debug(f"ℹ️ Serie {key} no existe, creando...")
+            
+            # Intentar crear la serie
             try:
                 logger.info(f"📝 Creando nueva serie: {key}")
                 
-                # 🔥 ORDEN CRÍTICO DE PARÁMETROS (no cambiar):
+                # 🔥 ORDEN CRÍTICO DE PARÁMETROS:
                 # TS.CREATE key RETENTION ms DUPLICATE_POLICY policy LABELS ...
                 self.redis.execute_command(
                     'TS.CREATE', key,
-                    'RETENTION', str(RETENTION_MS),          # ✅ PRIMERO
-                    'DUPLICATE_POLICY', 'LAST',              # ✅ SEGUNDO
-                    'LABELS',                                # ✅ TERCERO
+                    'RETENTION', str(RETENTION_MS),
+                    'DUPLICATE_POLICY', 'LAST',
+                    'LABELS',
                     'user_id', str(labels.get('user_id', '')),
                     'device_id', str(labels.get('device_id', '')),
                     'type', str(labels.get('type', ''))
                 )
                 
-                _GLOBAL_CREATED_SERIES.add(key)
-                
-                # Verificar que se creó correctamente
+                # ✅ Verificar que se creó correctamente
                 verify_info = self.redis.ts().info(key)
-                verify_retention = verify_info.get('retentionTime', 0)
-                verify_dup_policy = verify_info.get('duplicatePolicy')
+                verify_retention = verify_info.retention_msecs
+                verify_dup_policy = verify_info.duplicate_policy
                 
                 logger.info(
-                    f"✅ Serie creada exitosamente: {key}\n"
+                    f"✅ Serie creada: {key}\n"
                     f"   • RETENTION: {verify_retention}ms ({verify_retention / 86400000:.1f} días)\n"
-                    f"   • DUPLICATE_POLICY: {verify_dup_policy}"
+                    f"   • DUPLICATE_POLICY: {verify_dup_policy.decode() if isinstance(verify_dup_policy, bytes) else verify_dup_policy}"
                 )
                 
-                # Validar que se creó con la configuración esperada
+                # Validar configuración
                 if verify_retention != RETENTION_MS:
                     logger.error(
-                        f"❌ ADVERTENCIA CRÍTICA: Serie creada con retention incorrecto\n"
+                        f"❌ ADVERTENCIA: Serie creada con retention incorrecto\n"
                         f"   • Esperado: {RETENTION_MS}ms\n"
-                        f"   • Obtenido: {verify_retention}ms\n"
-                        f"   • Posible causa: Orden incorrecto de parámetros en TS.CREATE"
+                        f"   • Obtenido: {verify_retention}ms"
                     )
                 
-                if verify_dup_policy != 'last':
+                if verify_dup_policy != b'last':
                     logger.error(
-                        f"❌ ADVERTENCIA CRÍTICA: Serie creada con duplicate policy incorrecto\n"
+                        f"❌ ADVERTENCIA: Duplicate policy incorrecto\n"
                         f"   • Esperado: last\n"
                         f"   • Obtenido: {verify_dup_policy}"
                     )
                 
             except Exception as create_error:
-                error_msg = str(create_error).lower()
+                create_error_msg = str(create_error).lower()
                 
-                if "already exists" in error_msg or "tsdb: key already exists" in error_msg:
-                    # Otra instancia/worker la creó (race condition normal en multi-worker)
-                    _GLOBAL_CREATED_SERIES.add(key)
-                    logger.debug(f"✅ Serie creada por otro worker: {key}")
+                # Si otro worker la creó justo ahora (race condition), está bien
+                if "already exists" in create_error_msg or "tsdb: key already exists" in create_error_msg:
+                    logger.debug(f"✅ Serie ya existe (creada por otro worker): {key}")
                 else:
+                    # Error real al crear
                     logger.error(f"❌ Error creando serie {key}: {create_error}")
+                    raise  # Re-lanzar para que el caller lo maneje
 
     def add_measurements(self, user_id: int, device_id: str, watts: float, volts: float, amps: float):
         """
         Guarda las mediciones de un dispositivo en Redis TimeSeries.
         
-        Optimización: Usa TS.MADD para insertar 3 valores en una sola operación.
+        ✅ Multi-worker safe: Cada worker verifica en Redis antes de insertar.
+        ✅ Optimización: Usa TS.MADD para insertar 3 valores en una operación.
         """
         # Generar timestamp UTC actual
         base_timestamp = int(datetime.now(timezone.utc).timestamp() * 1000)
@@ -142,7 +131,8 @@ class TimeSeriesRepository:
         key_amps  = f"ts:user:{user_id}:device:{device_id}:amps"
 
         try:
-            # Asegurar que las series existan con la configuración correcta
+            # ✅ Asegurar que las series existan
+            # Cada worker verifica en Redis (no en cache local)
             self._ensure_ts_exists(key_watts, {
                 "user_id": str(user_id),
                 "device_id": str(device_id),
@@ -159,7 +149,8 @@ class TimeSeriesRepository:
                 "type": "amps"
             })
 
-            # Insertar datos usando TS.MADD (más eficiente que 3 TS.ADD)
+            # ✅ Insertar datos usando TS.MADD
+            # Timestamps ligeramente diferentes para evitar colisiones
             self.redis.execute_command(
                 'TS.MADD',
                 key_watts, base_timestamp, watts,
@@ -176,21 +167,39 @@ class TimeSeriesRepository:
             logger.error(
                 f"❌ Error guardando datos para device {device_id}: {e}"
             )
+            # No re-lanzar - permitir que otras peticiones continúen
 
 
-def clear_series_cache():
+# 🔧 Función de utilidad para limpiar series manualmente
+def delete_series(redis_client: Redis, user_id: int, device_id: int):
     """
-    Limpia el cache de series verificadas.
+    Elimina las series de un dispositivo específico.
     
-    Útil cuando:
-    - Se reinicia Redis y necesitas forzar re-verificación
-    - Se eliminan series manualmente y quieres que se recreen
-    - Debugging de problemas de configuración
+    Útil para:
+    - Resetear series con configuración incorrecta
+    - Testing y desarrollo
+    - Limpieza manual
     
     Uso:
-        from app.repositories.timeseries_repository import clear_series_cache
-        clear_series_cache()
+        from app.repositories.timeseries_repository import delete_series
+        from app.database import redis_client
+        delete_series(redis_client, user_id=6, device_id=3)
     """
-    global _GLOBAL_CREATED_SERIES
-    _GLOBAL_CREATED_SERIES.clear()
-    logger.info("🔄 Cache de series limpiado")
+    keys_to_delete = [
+        f"ts:user:{user_id}:device:{device_id}:watts",
+        f"ts:user:{user_id}:device:{device_id}:volts",
+        f"ts:user:{user_id}:device:{device_id}:amps"
+    ]
+    
+    deleted = 0
+    for key in keys_to_delete:
+        try:
+            result = redis_client.delete(key)
+            if result:
+                deleted += 1
+                logger.info(f"🗑️ Serie eliminada: {key}")
+        except Exception as e:
+            logger.error(f"❌ Error eliminando {key}: {e}")
+    
+    logger.info(f"✅ {deleted}/3 series eliminadas para user={user_id}, device={device_id}")
+    return deleted
