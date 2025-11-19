@@ -3,6 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from redis import Redis
+from datetime import timezone
 
 from app.database import get_db, get_redis_client
 from app.core import TokenData, get_current_user
@@ -106,9 +107,12 @@ def get_available_report_periods(
     
     # Obtener fecha de creación del usuario
     user_created = user.user_created
+
+    if user_created.tzinfo is None:
+        user_created = user_created.replace(tzinfo=timezone.utc)
     
     # Generar lista de periodos desde la creación hasta el mes actual
-    now = datetime.now()
+    now = datetime.now(timezone.utc)
     periods = []
     
     # Nombres de meses en español
@@ -118,7 +122,9 @@ def get_available_report_periods(
         9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre"
     }
     
-    current = user_created.replace(day=1)
+    
+    current = user_created.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    
     while current <= now:
         periods.append({
             "month": current.month,
