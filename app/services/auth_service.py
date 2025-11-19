@@ -15,7 +15,7 @@ from app.core import logger, settings, security
 from passlib.context import CryptContext
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
+REFRESH_TOKEN_DAYS = 30
 
 def login_for_access_token(db: Session, user_data: UserLogin) -> TokenResponse:
     user_repo = UserRepository(db)
@@ -35,8 +35,8 @@ def login_for_access_token(db: Session, user_data: UserLogin) -> TokenResponse:
         data={"user_id": user.user_id}, expires_delta=access_token_expires
     )
 
-    # 2. Crear Refresh Token de larga duración
-    refresh_token_expires = timedelta(days=30)
+    # 2. Crear Refresh Token de larga duración (30 días)
+    refresh_token_expires = timedelta(days=REFRESH_TOKEN_DAYS)
     refresh_token_str = secrets.token_urlsafe(32)
     expires_at = datetime.now(timezone.utc) + refresh_token_expires
     
@@ -53,26 +53,54 @@ def login_for_access_token(db: Session, user_data: UserLogin) -> TokenResponse:
     )
 
 def refresh_access_token(db: Session, refresh_token_str: str) -> TokenResponse:
+    """
+    1. Valida el refresh token actual
+    2. Genera un nuevo access token
+    3. Genera un NUEVO refresh token (rotación)
+    4. Invalida el refresh token anterior
+    5. Devuelve ambos tokens nuevos
+    """
     token_repo = RefreshTokenRepository(db)
-    refresh_token = token_repo.get_token(refresh_token_str)
+    old_refresh_token = token_repo.get_token(refresh_token_str)
 
     # Validar que el token de refresco exista y no haya expirado
-    if not refresh_token or refresh_token.ref_expires_at < datetime.now(timezone.utc):
+    if not old_refresh_token or old_refresh_token.ref_expires_at < datetime.now(timezone.utc):
+        logger.warning(f"Intento de uso de refresh token inválido o expirado")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token de refresco inválido o expirado",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # Generar un nuevo access token
+    user_id = old_refresh_token.ref_user_id
+
+    # 1. Generar un nuevo access token
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     new_access_token = security.create_token(
-        data={"user_id": refresh_token.ref_user_id}, expires_delta=access_token_expires
+        data={"user_id": user_id}, expires_delta=access_token_expires
     )
     
+    # 2. ROTACIÓN: Generar un NUEVO refresh token con 30 días de vida
+    new_refresh_token_str = secrets.token_urlsafe(32)
+    refresh_token_expires = timedelta(days=REFRESH_TOKEN_DAYS)
+    expires_at = datetime.now(timezone.utc) + refresh_token_expires
+    
+    # 3. Guardar el nuevo refresh token
+    token_repo.create_token(
+        user_id=user_id, 
+        token=new_refresh_token_str, 
+        expires_at=expires_at
+    )
+    
+    # 4. Eliminar el refresh token anterior (invalidarlo)
+    token_repo.delete_token(refresh_token_str)
+    
+    logger.info(f"Refresh token rotado exitosamente para usuario {user_id}")
+    
+    # 5. Devolver AMBOS tokens nuevos
     return TokenResponse(
         access_token=new_access_token,
-        refresh_token=refresh_token_str, # Se devuelve el mismo refresh token
+        refresh_token=new_refresh_token_str,  # ¡Token nuevo!
         token_type="Bearer"
     )
 
