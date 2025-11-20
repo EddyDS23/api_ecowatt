@@ -22,3 +22,5 @@ class User(Base):
     alerts = relationship("Alert", back_populates="user", cascade="all, delete-orphan") 
     recommendations = relationship("Recommendation", back_populates="user", cascade="all, delete-orphan") 
     refresh_tokens = relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan") 
+    fcm_tokens = relationship("FCMToken", back_populates="user", cascade="all, delete-orphan")
+

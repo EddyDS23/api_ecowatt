@@ -7,3 +7,4 @@ from .alert import Alert
 from .recommendation import Recommendation
 from .refresh_token import RefreshToken 
 from .password_reset_token import PasswordResetToken
+from .fcm_token import FCMToken

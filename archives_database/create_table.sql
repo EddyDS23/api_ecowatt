@@ -92,3 +92,13 @@ CREATE TABLE tbPasswordResetTokens (
     CONSTRAINT unique_reset_token UNIQUE(prt_token),
     CONSTRAINT fk_reset_token_user FOREIGN KEY(prt_user_id) REFERENCES tbUsers(user_id) ON DELETE CASCADE
 );
+
+CREATE TABLE tbFCMTokens (
+    fcm_id SERIAL PRIMARY KEY,
+    fcm_user_id INT NOT NULL,
+    fcm_token VARCHAR(255) NOT NULL UNIQUE,
+    fcm_device_name VARCHAR(100),
+    fcm_platform VARCHAR(20),
+    fcm_last_used TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    CONSTRAINT fk_fcm_user FOREIGN KEY(fcm_user_id) REFERENCES tbUsers(user_id) ON DELETE CASCADE
+);
