@@ -3,7 +3,7 @@
 from sqlalchemy.orm import Session
 from app.models import Device
 from app.repositories import DeviceRepository
-from app.schemas import DeviceCreate, DeviceUpdate, DeviceResponse, DeviceFCMRegister
+from app.schemas import DeviceCreate, DeviceUpdate, DeviceResponse
 from app.core import logger
 
 def get_device_by_id_service(db: Session, dev_id: int, user_id: int) -> DeviceResponse | None:

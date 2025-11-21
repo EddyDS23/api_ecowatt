@@ -6,14 +6,13 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.database import get_db
 from app.core import TokenData, get_current_user
-from app.schemas import DeviceResponse, DeviceCreate, DeviceUpdate, DeviceFCMRegister
+from app.schemas import DeviceResponse, DeviceCreate, DeviceUpdate
 from app.services import (
     create_device_service,
     get_all_devices_by_user_service,
     get_device_by_id_service,
     update_device_service,
-    delete_device_service,
-    register_fcm_token_service
+    delete_device_service
 )
 
 router = APIRouter(prefix="/devices", tags=["Devices"])
