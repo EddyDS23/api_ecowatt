@@ -17,6 +17,7 @@ from .recommendation_schema import RecommendationResponse
 from .ingest_schema import ShellySwitchStatus, ShellyIngestData, ShellySysStatus
 from .dashboard_schema import DashboardSummary
 from .history_schema import HistoryPeriod, HistoryResponse
+from .fcm_schema import FCMTokenRegister
 
 from .monthly_report_schema import (
     MonthlyReport,

@@ -59,6 +59,6 @@ def create_alert_and_recommendation(
         logger.error(f"Error general: {e}")
     
     # 4. Recomendación IA
-    generate_recommendation_with_gemini(db=db, user_id=user_id, alert_type=alert_type, device_name=device_name, value=value)
+    generate_recommendation_with_gemini(db, user_id, alert_type, device_name, value)
 
     
