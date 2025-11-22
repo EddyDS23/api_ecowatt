@@ -7,30 +7,65 @@ from dateutil.relativedelta import relativedelta
 from collections import defaultdict
 import calendar
 
-from app.repositories import UserRepository, TarrifRepository, AlertRepository, RecommendationRepository
-from app.schemas.monthly_report_schema import (
-    MonthlyReport, ReportHeader, ExecutiveSummary, ConsumptionDetails,
-    CostBreakdown, EnvironmentalImpact, MonthAlert, MonthRecommendation,
-    DailyConsumptionPoint, TariffLevel
-)
+from app.repositories import UserRepository, TarrifRepository, AlertRepository, RecommendationRepository, ReportRepository
+from app.schemas.monthly_report_schema import MonthlyReport, ReportHeader, ExecutiveSummary, ConsumptionDetails, CostBreakdown, EnvironmentalImpact, MonthAlert, MonthRecommendation, DailyConsumptionPoint, TariffLevel
 from app.core import logger, settings
 
 
 def generate_monthly_report(db: Session, redis_client: Redis, user_id: int, month: int, year: int) -> MonthlyReport | None:
     """
-    Genera un reporte mensual completo para un usuario.
+    Genera reporte mensual.
     
-    Args:
-        db: Sesión de base de datos
-        redis_client: Cliente Redis
-        user_id: ID del usuario
-        month: Mes del reporte (1-12)
-        year: Año del reporte
-    
-    Returns:
-        MonthlyReport completo o None si hay error
+    ✅ LÓGICA:
+    - Mes actual: genera desde Redis (no guarda)
+    - Mes anterior: busca en BD primero, si no existe lo genera y guarda
     """
     try:
+        now = datetime.now(timezone.utc)
+        is_current_month = (month == now.month and year == now.year)
+        
+        report_repo = ReportRepository(db)
+        
+        # ✅ Mes actual: generar sin guardar
+        if is_current_month:
+            logger.info(f"📊 Generando reporte MES ACTUAL: {month}/{year} (tiempo real)")
+            return _generate_report_from_redis(db, redis_client, user_id, month, year)
+        
+        # ✅ Mes anterior: buscar en BD
+        logger.info(f"🔍 Buscando reporte guardado: {month}/{year}")
+        existing = report_repo.get_by_month(user_id, month, year)
+        
+        if existing:
+            logger.info(f"✅ Reporte encontrado en BD")
+            return MonthlyReport(**existing.mr_report_data)
+        
+        # ✅ No existe: generarlo y guardarlo
+        logger.info(f"⚙️  Generando y guardando reporte: {month}/{year}")
+        report = _generate_report_from_redis(db, redis_client, user_id, month, year)
+        
+        if report:
+            report_repo.save(
+                user_id=user_id,
+                month=month,
+                year=year,
+                report_data=report.model_dump(mode='json'),
+                total_kwh=float(report.executive_summary.total_kwh_consumed),
+                total_cost=float(report.executive_summary.total_estimated_cost_mxn)
+            )
+        
+        return report
+        
+    except Exception as e:
+        logger.exception(f"Error generando reporte: {e}")
+        return None
+    
+
+def _generate_report_from_redis(db: Session, redis_client: Redis, user_id: int, month: int, year: int) -> MonthlyReport | None:
+    """
+    Genera reporte desde Redis/PostgreSQL.
+    """
+    try:
+        
         logger.info(f"📄 Generando reporte mensual para user {user_id} - {month}/{year}")
         
         # 1. Obtener usuario y validar
@@ -95,7 +130,7 @@ def generate_monthly_report(db: Session, redis_client: Redis, user_id: int, mont
         return report
         
     except Exception as e:
-        logger.exception(f"❌ Error generando reporte mensual: {e}")
+        logger.exception(f"Error en _generate_report_from_redis: {e}")
         return None
 
 

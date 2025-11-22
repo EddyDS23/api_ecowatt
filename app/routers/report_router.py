@@ -3,7 +3,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from redis import Redis
-from datetime import timezone
+from datetime import datetime, timezone
+from typing import List
+from pydantic import BaseModel
 
 from app.database import get_db, get_redis_client
 from app.core import TokenData, get_current_user
@@ -22,6 +24,10 @@ def generate_monthly_report_route(
 ):
     """
     Genera un reporte mensual completo para el usuario autenticado.
+    
+    ✅ NUEVO COMPORTAMIENTO:
+    - Mes actual: Genera en tiempo real desde Redis (no guarda en BD)
+    - Mes anterior: Busca en BD primero, si no existe lo genera y guarda
     """
     # Validar mes
     if not 1 <= request.month <= 12:
@@ -37,7 +43,7 @@ def generate_monthly_report_route(
             detail="El año debe estar entre 2020 y 2030"
         )
     
-    # Generar reporte
+    # Generar reporte (ahora con lógica de cache)
     report = generate_monthly_report(
         db=db,
         redis_client=redis_client,
@@ -63,9 +69,9 @@ def get_current_month_report_route(
 ):
     """
     Genera el reporte del mes actual automáticamente.
+    Siempre genera en tiempo real (no usa cache).
     """
-    from datetime import datetime
-    now = datetime.now()
+    now = datetime.now(timezone.utc)
     
     report = generate_monthly_report(
         db=db,
@@ -84,63 +90,91 @@ def get_current_month_report_route(
     return report
 
 
-@router.get("/monthly/available-periods")
+class AvailablePeriod(BaseModel):
+    """Periodo disponible para consultar"""
+    month: int
+    year: int
+    label: str
+    is_current: bool
+    is_saved: bool
+    total_kwh: float | None = None
+    total_cost: float | None = None
+    generated_at: datetime | None = None
+    expires_at: datetime | None = None
+    days_until_expiration: int | None = None
+
+@router.get("/monthly/available-periods", response_model=dict)
 def get_available_report_periods(
     db: Session = Depends(get_db),
-    redis_client: Redis = Depends(get_redis_client),
     current_user: TokenData = Depends(get_current_user)
 ):
     """
-    Devuelve una lista de periodos disponibles para generar reportes.
+    Lista periodos disponibles para generar reportes.
+    
+    Retorna:
+    - Mes actual (siempre disponible, tiempo real)
+    - Meses anteriores guardados (con info completa)
+    
+    Usa este endpoint para:
+    - Mostrar selector de meses en tu app
+    - Ver cuáles reportes están guardados
+    - Saber cuándo expiran los reportes guardados
     """
-    from datetime import datetime
-    from app.repositories import UserRepository
+    from app.repositories import ReportRepository
     
-    user_repo = UserRepository(db)
-    user = user_repo.get_user_id_repository(current_user.user_id)
-    
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Usuario no encontrado"
-        )
-    
-    # Obtener fecha de creación del usuario
-    user_created = user.user_created
-
-    if user_created.tzinfo is None:
-        user_created = user_created.replace(tzinfo=timezone.utc)
-    
-    # Generar lista de periodos desde la creación hasta el mes actual
     now = datetime.now(timezone.utc)
-    periods = []
-    
-    # Nombres de meses en español
     month_names = {
         1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril",
         5: "Mayo", 6: "Junio", 7: "Julio", 8: "Agosto",
         9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre"
     }
     
+    periods = []
     
-    current = user_created.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    # 1. Mes actual (siempre disponible)
+    periods.append({
+        "month": now.month,
+        "year": now.year,
+        "label": f"{month_names[now.month]} {now.year}",
+        "is_current": True,
+        "is_saved": False,
+        "total_kwh": None,
+        "total_cost": None,
+        "generated_at": None,
+        "expires_at": None,
+        "days_until_expiration": None
+    })
     
-    while current <= now:
+    # 2. Meses guardados en BD
+    report_repo = ReportRepository(db)
+    saved_reports = report_repo.get_all_by_user(current_user.user_id)
+    
+    for report in saved_reports:
+        # No duplicar el mes actual
+        if report.mr_month == now.month and report.mr_year == now.year:
+            continue
+        
+        days_left = (report.mr_expires_at - now).days if report.mr_expires_at else None
+        
         periods.append({
-            "month": current.month,
-            "year": current.year,
-            "label": f"{month_names[current.month]} {current.year}"
+            "month": report.mr_month,
+            "year": report.mr_year,
+            "label": f"{month_names[report.mr_month]} {report.mr_year}",
+            "is_current": False,
+            "is_saved": True,
+            "total_kwh": float(report.mr_total_kwh) if report.mr_total_kwh else None,
+            "total_cost": float(report.mr_total_cost) if report.mr_total_cost else None,
+            "generated_at": report.mr_generated_at,
+            "expires_at": report.mr_expires_at,
+            "days_until_expiration": days_left
         })
-        # Siguiente mes
-        if current.month == 12:
-            current = current.replace(year=current.year + 1, month=1)
-        else:
-            current = current.replace(month=current.month + 1)
     
-    # Invertir para mostrar los más recientes primero
-    periods.reverse()
+    # Ordenar por año y mes descendente
+    periods.sort(key=lambda x: (x['year'], x['month']), reverse=True)
     
     return {
         "available_periods": periods,
         "total_periods": len(periods)
     }
+
+
