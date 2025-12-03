@@ -18,12 +18,16 @@ os.environ['TZ'] = 'UTC'
 import time
 time.tzset()
 
-try:
-    cred = credentials.Certificate(settings.FIREBASE_CREDENTIALS_PATH)
-    firebase_admin.initialize_app(cred)
-    logger.info("Firebase Admin SDK inicializado correctamente.")
-except Exception as e:
-    logger.error(f"Error al inicializar Firebase Admin SDK: {e}")
+
+if not firebase_admin._apps:
+    try:
+        cred = credentials.Certificate(settings.FIREBASE_CREDENTIALS_PATH)
+        firebase_admin.initialize_app(cred)
+        logger.info("Firebase Admin SDK inicializado correctamente.")
+    except Exception as e:
+        logger.error(f"Error al inicializar Firebase Admin SDK: {e}")
+else:
+    logger.info("Firebase Admin SDK ya estaba inicializado (worker reutilizado).")
 
 
 

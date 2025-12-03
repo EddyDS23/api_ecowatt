@@ -19,7 +19,7 @@ def create_alert_and_recommendation(
     device_name: str, 
     device_id: int, 
     alert_type: str, 
-    value: str
+    value: str,
 ):
     alert_repo = AlertRepository(db)
     
