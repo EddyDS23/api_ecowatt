@@ -102,3 +102,21 @@ CREATE TABLE tbFCMTokens (
     fcm_last_used TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     CONSTRAINT fk_fcm_user FOREIGN KEY(fcm_user_id) REFERENCES tbUsers(user_id) ON DELETE CASCADE
 );
+
+CREATE TABLE tbMonthlyReports (
+    mr_id SERIAL PRIMARY KEY,
+    mr_user_id INT NOT NULL,
+    mr_month INT NOT NULL CHECK (mr_month >= 1 AND mr_month <= 12),
+    mr_year INT NOT NULL CHECK (mr_year >= 2020 AND mr_year <= 2100),
+    mr_report_data JSONB NOT NULL,
+    mr_total_kwh DECIMAL(10, 2),
+    mr_total_cost DECIMAL(10, 2),
+    mr_generated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    mr_expires_at TIMESTAMP WITH TIME ZONE,
+    CONSTRAINT fk_monthly_report_user 
+        FOREIGN KEY(mr_user_id) 
+        REFERENCES tbUsers(user_id) 
+        ON DELETE CASCADE,
+    CONSTRAINT unique_user_month_year 
+        UNIQUE(mr_user_id, mr_month, mr_year)
+);
