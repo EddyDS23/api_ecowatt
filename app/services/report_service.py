@@ -137,22 +137,47 @@ def _generate_report_from_redis(db: Session, redis_client: Redis, user_id: int, 
 def _calculate_billing_cycle_for_month(billing_day: int, month: int, year: int) -> tuple | None:
     """Calcula las fechas de inicio y fin del ciclo de facturación para un mes específico"""
     try:
-        # Crear fecha del inicio del ciclo EN UTC
+        # Crear fecha de referencia (primer día del mes solicitado)
+        target_date = datetime(year, month, 1, 12, 0, 0, tzinfo=timezone.utc)
+        
+        # === LÓGICA COPIADA DE dashboard_service.py ===
         try:
-            cycle_start = datetime(year, month, billing_day, 0, 0, 0, tzinfo=timezone.utc)
+            if target_date.day >= billing_day:
+                start_date = target_date.replace(
+                    day=billing_day, hour=0, minute=0, second=0, microsecond=0
+                )
+            else:
+                start_date = (target_date - relativedelta(months=1)).replace(
+                    day=billing_day, hour=0, minute=0, second=0, microsecond=0
+                )
         except ValueError:
-            # Si el día no existe en el mes (ej: 31 en febrero), usar último día del mes
-            last_day = calendar.monthrange(year, month)[1]
-            cycle_start = datetime(year, month, min(billing_day, last_day), 0, 0, 0, tzinfo=timezone.utc)
+            # Manejar días inválidos (ej: 31 en febrero)
+            if target_date.day >= billing_day:
+                last_day = calendar.monthrange(year, month)[1]
+                start_date = target_date.replace(
+                    day=min(billing_day, last_day),
+                    hour=0, minute=0, second=0, microsecond=0
+                )
+            else:
+                prev_month = target_date - relativedelta(months=1)
+                last_day = calendar.monthrange(prev_month.year, prev_month.month)[1]
+                start_date = prev_month.replace(
+                    day=min(billing_day, last_day),
+                    hour=0, minute=0, second=0, microsecond=0
+                )
         
-        # Fin del ciclo: un mes después, menos 1 segundo
-        cycle_end = (cycle_start + relativedelta(months=1)) - timedelta(seconds=1)
+        end_date = (start_date + relativedelta(months=1)) - timedelta(seconds=1)
         
-        return (cycle_start, cycle_end)
+        logger.info(
+            f"📅 Ciclo para {month}/{year}: "
+            f"{start_date.date()} → {end_date.date()}"
+        )
+        
+        return (start_date, end_date)
+        
     except Exception as e:
         logger.error(f"Error calculando ciclo: {e}")
         return None
-
 
 def _generate_header(user, devices, start_date, end_date, month, year) -> ReportHeader:
     """Genera el encabezado del reporte"""
