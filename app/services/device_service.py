@@ -57,6 +57,12 @@ def update_device_service(db: Session, dev_id: int, user_id: int, device_data: D
     updated_device = device_repo.update_device_repository(dev_id, update_data)
     
     if updated_device:
+         # === INVALIDAR CACHE ===
+        from app.database import get_redis_client
+        redis = next(get_redis_client())
+        cache_key = f"device:mac:{updated_device.dev_hardware_id}"
+        redis.delete(cache_key)
+        logger.info(f"🗑️ Cache invalidado para device {dev_id}")
         return DeviceResponse.model_validate(updated_device)
     
     return None
