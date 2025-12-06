@@ -89,7 +89,7 @@ async def process_shelly_data(db: Session, redis_client: Redis, data: ShellyInge
             "volts": volts,
             "amps": amps
         }
-        await manager.broadcast_to_device(device.dev_id, json.dumps(message_to_broadcast))
+        await manager.broadcast_to_device(device_id, json.dumps(message_to_broadcast))
     except json.JSONDecodeError as e:
         logger.error(f"❌ Error decodificando cache para {hardware_id}: {e}")
         # Invalidar cache corrupto
