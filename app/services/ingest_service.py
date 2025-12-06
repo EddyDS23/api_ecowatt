@@ -68,28 +68,28 @@ async def process_shelly_data(db: Session, redis_client: Redis, data: ShellyInge
             user_id = device.dev_user_id
             is_active = device.dev_status
 
-            # === PASO 2: Validar Estado ===
-            if not is_active:
-                logger.debug(f"⏸️ Dispositivo inactivo: {hardware_id}")
-                return
+        # === PASO 2: Validar Estado ===
+        if not is_active:
+            logger.debug(f"⏸️ Dispositivo inactivo: {hardware_id}")
+            return
         
-            # === PASO 3: Guardar en Redis TimeSeries ===
-            ts_repo = TimeSeriesRepository(redis_client)
-            ts_repo.add_measurements(
-                user_id=user_id,
-                device_id=device_id,
-                watts=watts,
-                volts=volts,
-                amps=amps
+        # === PASO 3: Guardar en Redis TimeSeries ===
+        ts_repo = TimeSeriesRepository(redis_client)
+        ts_repo.add_measurements(
+            user_id=user_id,
+            device_id=device_id,
+            watts=watts,
+            volts=volts,
+            amps=amps
             )
 
         # === PASO 4: WebSocket Broadcast ===
-            message_to_broadcast = {
-                "watts": watts,
-                "volts": volts,
-                "amps": amps
-            }
-            await manager.broadcast_to_device(device.dev_id, json.dumps(message_to_broadcast))
+        message_to_broadcast = {
+            "watts": watts,
+            "volts": volts,
+            "amps": amps
+        }
+        await manager.broadcast_to_device(device.dev_id, json.dumps(message_to_broadcast))
     except json.JSONDecodeError as e:
         logger.error(f"❌ Error decodificando cache para {hardware_id}: {e}")
         # Invalidar cache corrupto

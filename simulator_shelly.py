@@ -5,7 +5,7 @@ import random
 
 # --- CONFIGURACIÓN ---
 API_INGEST_URL = "https://core-cloud.dev/api/v1/ingest/shelly"
-SHELLY_MAC_ADDRESS = "1b2b3b4b5b6b"  # MAC registrada en tu base de datos
+SHELLY_MAC_ADDRESS = "1a2b3c4a5b6c7d"  # MAC registrada en tu base de datos
 
 # Intervalo entre envíos (en segundos)
 SEND_INTERVAL = 10
