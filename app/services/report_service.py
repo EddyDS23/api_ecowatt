@@ -91,18 +91,20 @@ def _generate_report_from_redis(db: Session, redis_client: Redis, user_id: int, 
         # =========================================================================
         # 🚀 LÓGICA OPTIMIZADA: Idéntica al Dashboard + Anti-Huecos
         # =========================================================================
-        grand_total_kwh = 0.0
+        grand_total_watt_seconds = 0.0 
         daily_kwh_map = defaultdict(float) 
-        MAX_GAP_SECONDS = 60.0             # Mismo filtro que pusiste en el Dashboard
+        MAX_GAP_SECONDS = 60.0           
 
         for device in active_devices:
             watts_key = f"ts:user:{user_id}:device:{device.dev_id}:watts"
             try:
-                # Traer datos UNA sola vez (Optimización de velocidad)
                 data = redis_client.ts().range(watts_key, start_ts, end_ts)
                 
                 if len(data) < 2:
                     continue
+
+                # Acumulador temporal para este dispositivo
+                device_watt_seconds = 0.0
 
                 for i in range(1, len(data)):
                     t0, v0 = data[i-1]
@@ -111,25 +113,28 @@ def _generate_report_from_redis(db: Session, redis_client: Redis, user_id: int, 
                     v0, v1 = float(v0), float(v1)
                     dt_seconds = (t1 - t0) / 1000.0
                     
-                    # Filtro anti-fantasmas (aplica igual que en el dashboard)
                     if dt_seconds > MAX_GAP_SECONDS:
                         continue
                     
-                    # Cálculo de energía del intervalo
                     avg_watts = (v0 + v1) / 2.0
-                    interval_kwh = (avg_watts * dt_seconds) / 3_600_000.0
                     
-                    # A. Sumar al Total General (para el precio final)
-                    grand_total_kwh += interval_kwh
+                    # 1. Sumamos Watt-Segundos (Números grandes = Mejor precisión)
+                    interval_ws = avg_watts * dt_seconds
+                    device_watt_seconds += interval_ws
                     
-                    # B. Sumar al Día (solo para la gráfica visual)
+                    # 2. Para el mapa diario, sí convertimos al vuelo (solo es visual)
+                    # Usamos t0 para asignar el día
                     day_key = datetime.fromtimestamp(t0 / 1000, tz=timezone.utc).strftime("%Y-%m-%d")
-                    daily_kwh_map[day_key] += interval_kwh
+                    daily_kwh_map[day_key] += (interval_ws / 3_600_000.0)
+
+                # Sumamos al gran total de Watt-Segundos
+                grand_total_watt_seconds += device_watt_seconds
 
             except Exception as e:
                 logger.error(f"Error procesando device {device.dev_id}: {e}")
 
-        logger.info(f"   ⚡ Cálculo Optimizado Completado. Total: {grand_total_kwh:.4f} kWh")
+        grand_total_kwh = grand_total_watt_seconds / 3_600_000.0
+        logger.info(f"   ⚡ Cálculo de Alta Precisión. Total: {grand_total_kwh:.4f} kWh")
         
         # =========================================================================
         # 4. Construir el reporte con el 'grand_total_kwh' exacto
