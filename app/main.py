@@ -248,7 +248,7 @@ app.add_middleware(
 # --- Routers ---
 app.include_router(api_router)
 app.include_router(websocket_router.router)
-app.include_router(device_control_router)
+app.include_router(device_control_router.router)
 
 # --- Documentación Scalar ---
 @app.get("/docs", response_class=HTMLResponse, tags=["Documentation"])
