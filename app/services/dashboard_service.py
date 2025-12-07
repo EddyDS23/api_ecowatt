@@ -88,11 +88,18 @@ def get_dashboard_summary(db: Session, redis_client: Redis, user_id: int):
                 
                 # Calcular kWh usando integración trapezoidal
                 device_watt_seconds = 0.0
+                MAX_GAP_SECONDS = 60.0
                 for i in range(1, len(data)):
                     try:
                         t0, t1 = data[i-1][0], data[i][0]
                         v0, v1 = float(data[i-1][1]), float(data[i][1])
                         dt = (t1 - t0) / 1000.0  # ms → s
+
+                        if dt > MAX_GAP_SECONDS:
+                            # Si hay un salto grande, asumimos que el dispositivo estuvo apagado
+                            # o desconectado. No sumamos nada en este intervalo.
+                            continue
+
                         avg_watts = (v0 + v1) / 2.0
                         device_watt_seconds += avg_watts * dt
                     except Exception as e:
