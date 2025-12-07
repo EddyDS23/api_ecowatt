@@ -5,6 +5,7 @@ import json
 from typing import Dict, Any, Optional
 from app.core import logger
 from app.core.settings import settings  # Importamos tus settings
+import uuid
 
 class MQTTClient:
     def __init__(self):
@@ -14,16 +15,19 @@ class MQTTClient:
     def start(self):
         """Inicia la conexión usando las variables de tu .env"""
         try:
-            # Cliente con ID único para el backend
-            self.client = mqtt.Client(client_id="ecowatt_backend_rpc", clean_session=True)
+            # --- CORRECCIÓN AQUÍ ---
+            # Generamos un ID único para cada worker de Gunicorn
+            # Ej: ecowatt_backend_rpc_a1b2c3d4
+            unique_id = f"ecowatt_backend_rpc_{uuid.uuid4().hex[:8]}"
+            
+            self.client = mqtt.Client(client_id=unique_id, clean_session=True)
             
             # Callbacks
             self.client.on_connect = self._on_connect
             self.client.on_disconnect = self._on_disconnect
             
-            # CONEXIÓN: Usamos tus variables HOST (localhost) y PORT (1884)
-            # Como entramos por el 1884 (privado), NO enviamos usuario/pass aquí.
-            logger.info(f"📡 Conectando MQTT a {settings.MQTT_BROKER_HOST}:{settings.MQTT_BROKER_PORT}...")
+            # CONEXIÓN
+            logger.info(f"📡 Conectando Worker {unique_id} a MQTT...")
             
             self.client.connect(
                 host=settings.MQTT_BROKER_HOST, 
@@ -31,7 +35,7 @@ class MQTTClient:
                 keepalive=60
             )
             
-            self.client.loop_start() # Arranca el hilo en segundo plano
+            self.client.loop_start() 
             
         except Exception as e:
             logger.error(f"❌ Error fatal iniciando MQTT: {e}")
