@@ -216,13 +216,13 @@ así como un endpoint de WebSocket para la transmisión de datos en tiempo real.
 async def lifespan(app: FastAPI):
     # --- CÓDIGO DE ARRANQUE (Startup) ---
     logger.info("🚀 Iniciando API EcoWatt...")
-    mqtt_client.connect()
+    mqtt_client.start()
     
     yield  # <-- Aquí es donde la API se queda corriendo y escuchando peticiones
     
     # --- CÓDIGO DE CIERRE (Shutdown) ---
     logger.info("🛑 Deteniendo servicios...")
-    mqtt_client.disconnect()
+    mqtt_client.stop()
 
 
 app = FastAPI(
