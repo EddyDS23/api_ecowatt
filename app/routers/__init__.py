@@ -17,6 +17,6 @@ api_router.include_router(dashboard_router.router)
 api_router.include_router(history_router.router)
 api_router.include_router(report_router.router)
 api_router.include_router(fcm_token_router.router)
-api_router.include_router(device_control_router)
+api_router.include_router(device_control_router.router)
 
 # El websocket_router no se incluye aquí para evitar el prefijo
