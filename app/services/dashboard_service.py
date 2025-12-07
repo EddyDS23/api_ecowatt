@@ -121,7 +121,7 @@ def get_dashboard_summary(db: Session, redis_client: Redis, user_id: int):
         estimated_cost = 0.0
         kwh_remaining = total_kwh
         tariff_repo = TarrifRepository(db)
-        tariffs = tariff_repo.get_tariffs_for_date(user.user_trf_rate, now_utc.date())
+        tariffs = tariff_repo.get_tariffs_for_date(user.user_trf_rate, start_date.date())
         
         if not tariffs:
             logger.error(f"No se encontraron tarifas para {user.user_trf_rate}")
