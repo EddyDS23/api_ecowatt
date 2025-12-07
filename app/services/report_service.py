@@ -60,62 +60,115 @@ def generate_monthly_report(db: Session, redis_client: Redis, user_id: int, mont
         return None
     
 
+# En app/services/report_service.py
+
 def _generate_report_from_redis(db: Session, redis_client: Redis, user_id: int, month: int, year: int) -> MonthlyReport | None:
     """
-    Genera reporte desde Redis/PostgreSQL.
+    Genera reporte mensual optimizado (Single Pass).
+    Calcula total y desglose diario en una sola iteración para máximo rendimiento.
     """
     try:
+        logger.info(f"📄 Generando reporte optimizado para user {user_id} - {month}/{year}")
         
-        logger.info(f"📄 Generando reporte mensual para user {user_id} - {month}/{year}")
-        
-        # 1. Obtener usuario y validar
+        # 1. Obtener usuario
         user_repo = UserRepository(db)
         user = user_repo.get_user_id_repository(user_id)
         if not user:
-            logger.error(f"Usuario {user_id} no encontrado")
             return None
         
-        # 2. Calcular ciclo de facturación del mes solicitado
+        # 2. Calcular ciclo
         billing_cycle = _calculate_billing_cycle_for_month(user.user_billing_day, month, year)
         if not billing_cycle:
-            logger.error(f"No se pudo calcular ciclo de facturación para {month}/{year}")
             return None
         
         start_date, end_date = billing_cycle
-        logger.info(f"   Ciclo de facturación: {start_date} → {end_date}")
+        start_ts = int(start_date.timestamp() * 1000)
+        end_ts = int(end_date.timestamp() * 1000)
         
-        # 3. Obtener dispositivos activos
+        # 3. Dispositivos activos
         active_devices = [d for d in user.devices if d.dev_status]
         if not active_devices:
-            logger.warning(f"Usuario {user_id} no tiene dispositivos activos")
             return None
         
-        # 4. Generar cada sección del reporte
+        # =========================================================================
+        # 🚀 LÓGICA OPTIMIZADA (1 sola pasada a los datos)
+        # =========================================================================
+        grand_total_kwh = 0.0
+        daily_kwh_map = defaultdict(float) # Acumulador simple: {'2025-10-01': 12.5, ...}
+        MAX_GAP_SECONDS = 60.0             # Filtro anti-fantasmas
+
+        for device in active_devices:
+            watts_key = f"ts:user:{user_id}:device:{device.dev_id}:watts"
+            try:
+                # 1. Traer datos UNA sola vez
+                data = redis_client.ts().range(watts_key, start_ts, end_ts)
+                
+                if len(data) < 2:
+                    continue
+
+                # 2. Iterar puntos (Cálculo vectorial manual)
+                for i in range(1, len(data)):
+                    t0, v0 = data[i-1]
+                    t1, v1 = data[i]
+                    
+                    # Convertir a float por seguridad
+                    v0, v1 = float(v0), float(v1)
+                    
+                    dt_seconds = (t1 - t0) / 1000.0
+                    
+                    # Filtro de huecos (si se fue la luz o simulador apagado)
+                    if dt_seconds > MAX_GAP_SECONDS:
+                        continue
+                    
+                    # Cálculo de energía del intervalo
+                    avg_watts = (v0 + v1) / 2.0
+                    interval_kwh = (avg_watts * dt_seconds) / 3_600_000.0
+                    
+                    # A. Sumar al Total General
+                    grand_total_kwh += interval_kwh
+                    
+                    # B. Sumar al Día Correspondiente (usamos t0 para decidir el día)
+                    day_key = datetime.fromtimestamp(t0 / 1000, tz=timezone.utc).strftime("%Y-%m-%d")
+                    daily_kwh_map[day_key] += interval_kwh
+
+            except Exception as e:
+                logger.error(f"Error procesando device {device.dev_id}: {e}")
+
+        logger.info(f"   ⚡ Cálculo Optimizado Completado. Total: {grand_total_kwh:.4f} kWh")
+        
+        # =========================================================================
+        # 4. Construir objetos del reporte
+        # =========================================================================
+        
+        # A. Construir lista de consumo diario para la gráfica
+        daily_consumption = []
+        current_iter_date = start_date.date()
+        
+        # Iteramos por fecha calendario para asegurar que aparezcan días con 0 consumo
+        while current_iter_date <= end_date.date():
+            date_str = current_iter_date.strftime("%Y-%m-%d")
+            kwh_val = daily_kwh_map.get(date_str, 0.0)
+            
+            daily_consumption.append(DailyConsumptionPoint(
+                date=current_iter_date,
+                kwh=round(kwh_val, 4)
+            ))
+            current_iter_date += timedelta(days=1)
+
+        # B. Generar resto de secciones (usando el grand_total_kwh ya calculado)
         header = _generate_header(user, active_devices, start_date, end_date, month, year)
-        
-        daily_consumption = _get_daily_consumption_from_redis(
-            redis_client, user_id, active_devices, start_date, end_date
-        )
-        
-        total_kwh = sum(point.kwh for point in daily_consumption)
-        logger.info(f"   Total kWh consumidos: {total_kwh:.2f}")
-        
         consumption_details = _generate_consumption_details(daily_consumption, start_date, end_date)
-        
-        cost_breakdown = _calculate_cost_breakdown(db, user, total_kwh, start_date.date())
+        cost_breakdown = _calculate_cost_breakdown(db, user, grand_total_kwh, start_date.date())
         
         executive_summary = _generate_executive_summary(
-            total_kwh, cost_breakdown.total_cost_mxn, db, user_id, month, year
+            grand_total_kwh, cost_breakdown.total_cost_mxn, db, user_id, month, year
         )
-        
-        environmental_impact = _calculate_environmental_impact(total_kwh)
-        
+        environmental_impact = _calculate_environmental_impact(grand_total_kwh)
         alerts = _get_month_alerts(db, user_id, start_date, end_date)
-        
         recommendations = _get_month_recommendations(db, user_id, start_date, end_date)
         
-        # 5. Construir reporte completo
-        report = MonthlyReport(
+        # 5. Retornar
+        return MonthlyReport(
             header=header,
             executive_summary=executive_summary,
             consumption_details=consumption_details,
@@ -126,11 +179,8 @@ def _generate_report_from_redis(db: Session, redis_client: Redis, user_id: int, 
             generated_at=datetime.now(timezone.utc)
         )
         
-        logger.info(f"✅ Reporte mensual generado exitosamente para user {user_id}")
-        return report
-        
     except Exception as e:
-        logger.exception(f"Error en _generate_report_from_redis: {e}")
+        logger.exception(f"Error crítico en reporte optimizado: {e}")
         return None
 
 
