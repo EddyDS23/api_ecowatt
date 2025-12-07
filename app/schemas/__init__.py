@@ -18,6 +18,7 @@ from .ingest_schema import ShellySwitchStatus, ShellyIngestData, ShellySysStatus
 from .dashboard_schema import DashboardSummary
 from .history_schema import HistoryPeriod, HistoryResponse
 from .fcm_schema import FCMTokenRegister
+from .device_control_schema import ControlSetRequest, StatusResponse, ControlResponse
 
 from .monthly_report_schema import (
     MonthlyReport,
