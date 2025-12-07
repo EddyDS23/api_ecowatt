@@ -12,6 +12,12 @@ class Settings(BaseSettings):
     GEMINIS_API_KEY:str
     DISCORD_WEBHOOK_URL:str
     FIREBASE_CREDENTIALS_PATH:str
+    MQTT_BROKER_HOST: str
+    MQTT_BROKER_PORT: int
+    MQTT_SHELLY_HOST: str  
+    MQTT_SHELLY_PORT: int 
+    MQTT_SHELLY_USER: str
+    MQTT_SHELLY_PASS: str
 
 
     model_config = {"env_file":".env"}

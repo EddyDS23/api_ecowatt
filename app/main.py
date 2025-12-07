@@ -6,9 +6,11 @@ from celery.schedules import crontab
 from app.core import settings, logger
 from app.services import analyze_consumption_patterns
 from app.core.discord_logger import send_discord_alert
-from app.routers import api_router, websocket_router
+from app.routers import api_router, websocket_router, device_control_router
 import firebase_admin
 from firebase_admin import credentials
+from contextlib import asynccontextmanager
+from app.core.mqtt_client import mqtt_client
 
 import os
 from datetime import datetime, timezone
@@ -28,7 +30,6 @@ if not firebase_admin._apps:
         logger.error(f"Error al inicializar Firebase Admin SDK: {e}")
 else:
     logger.info("Firebase Admin SDK ya estaba inicializado (worker reutilizado).")
-
 
 
 
@@ -211,12 +212,26 @@ así como un endpoint de WebSocket para la transmisión de datos en tiempo real.
 * **Ejemplo:** `wss://core-cloud.dev/ws/live/1?token=eyJhbGciOi...`
 """
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # --- CÓDIGO DE ARRANQUE (Startup) ---
+    logger.info("🚀 Iniciando API EcoWatt...")
+    mqtt_client.connect()
+    
+    yield  # <-- Aquí es donde la API se queda corriendo y escuchando peticiones
+    
+    # --- CÓDIGO DE CIERRE (Shutdown) ---
+    logger.info("🛑 Deteniendo servicios...")
+    mqtt_client.disconnect()
+
+
 app = FastAPI(
     title="EcoWatt API",
     description=api_description,
     version="1.0.1",
     docs_url=None,
-    redoc_url=None
+    redoc_url=None,
+    lifespan=lifespan
 )
 
 
@@ -233,7 +248,7 @@ app.add_middleware(
 # --- Routers ---
 app.include_router(api_router)
 app.include_router(websocket_router.router)
-
+app.include_router(device_control_router)
 
 # --- Documentación Scalar ---
 @app.get("/docs", response_class=HTMLResponse, tags=["Documentation"])
