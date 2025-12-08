@@ -132,7 +132,7 @@ def send_data_loop():
         except Exception as e:
             print(f"❌ Error de conexión HTTP: {e}")
 
-        time.sleep(5) # Enviar cada 5 segundos
+        time.sleep(10) # Enviar cada 5 segundos
 
 # --- MAIN ---
 if __name__ == "__main__":
