@@ -65,27 +65,45 @@ class DeviceControlService:
             params=params
         )
         
-        # 5. Procesar resultado (AQUÍ ESTÁ EL CAMBIO)
+        # 5. Procesar resultado (CORREGIDO PARA LLENAR LOS CAMPOS NULL)
         if result["success"]:
+            shelly_data = result.get("response", {})
             
             # Datos base de la respuesta
             final_response = {
                 "success": True,
                 "message": "Comando ejecutado correctamente",
-                "device_name": device.dev_name, # Agregamos el nombre para que no salga null
+                "device_name": device.dev_name,
+                "method": method
             }
 
-            # Caso 1: GetStatus (Mapeamos 'response' -> 'status')
+            # Caso 1: GetStatus
             if method == "Switch.GetStatus":
-                final_response["status"] = result.get("response", {})
+                final_response["status"] = shelly_data
                 return final_response
 
-            # Caso 2: Switch.Set / Toggle (Mapeamos datos específicos)
+            # Caso 2: Switch.Set / Toggle
             elif method in ["Switch.Set", "Switch.Toggle"]:
-                 final_response["result_data"] = result.get("response", {})
+                 # El Shelly siempre devuelve 'was_on' (estado ANTERIOR)
+                 was_on = shelly_data.get("was_on")
+                 final_response["was_on"] = was_on
+
+                 # Calculamos el NUEVO estado
+                 if method == "Switch.Set":
+                     # Si forzamos un estado, el nuevo es el que pedimos
+                     new_state = params.get("on")
+                 else: 
+                     # Si es Toggle, el nuevo es lo opuesto al anterior
+                     new_state = not was_on if was_on is not None else None
+                 
+                 final_response["new_state"] = new_state
+                 
+                 # Generamos el texto de acción para el usuario
+                 if new_state is not None:
+                    final_response["action"] = "encendido" if new_state else "apagado"
+                 
                  return final_response
             
-            # Caso 3: Otros métodos (Devolvemos genérico)
             else:
                 return result
 
