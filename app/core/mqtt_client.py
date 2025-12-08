@@ -98,7 +98,7 @@ class MQTTClient:
         # 2. Payload RPC con instrucción de respuesta
         payload = {
             "id": request_id,
-            "src": BACKEND_RESPONSE_TOPIC,  # <--- MAGIA: Le decimos que responda AQUÍ
+            "src": BACKEND_RESPONSE_TOPIC,  # <--- MAGIA: Le deci   mos que responda AQUÍ
             "method": method,
             "params": params
         }
