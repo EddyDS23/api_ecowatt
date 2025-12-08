@@ -1,9 +1,8 @@
-# app/services/ingest_service.py (VERSIÓN CORREGIDA - SIN ASYNC)
+# app/services/ingest_service.py
 
 from sqlalchemy.orm import Session
 from redis import Redis
 import json
-import asyncio
 
 from app.repositories import DeviceRepository, TimeSeriesRepository
 from app.schemas import ShellyIngestData
@@ -12,9 +11,10 @@ from app.core.websocket_manager import manager
 
 DEVICE_CACHE_TTL = 3600
 
-def process_shelly_data(db: Session, redis_client: Redis, data: ShellyIngestData):
+# 🔥 CAMBIO 1: Convertimos la función a ASYNC
+async def process_shelly_data(db: Session, redis_client: Redis, data: ShellyIngestData):
     """
-    ✅ VERSIÓN CORREGIDA: Función SÍNCRONA que maneja WebSocket correctamente
+    Procesa los datos del Shelly y los envía al WebSocket en tiempo real.
     """
     hardware_id = data.sys_status.mac
     watts = data.switch_status.apower
@@ -31,7 +31,7 @@ def process_shelly_data(db: Session, redis_client: Redis, data: ShellyIngestData
             device_id = device_data["id"]
             user_id = device_data["user_id"]
             is_active = device_data["active"]
-            logger.debug(f"📦 Cache HIT: {hardware_id}")
+            # logger.debug(f"📦 Cache HIT: {hardware_id}")
         else:
             logger.info(f"🔍 Cache MISS: {hardware_id}, consultando BD")
             device_repo = DeviceRepository(db)
@@ -39,6 +39,7 @@ def process_shelly_data(db: Session, redis_client: Redis, data: ShellyIngestData
             
             if not device:
                 logger.warning(f"❌ Dispositivo no registrado: {hardware_id}")
+                # Guardamos "no existe" por 5 minutos para no saturar la BD
                 redis_client.setex(cache_key, 300, json.dumps({"exists": False}))
                 return
             
@@ -56,10 +57,10 @@ def process_shelly_data(db: Session, redis_client: Redis, data: ShellyIngestData
 
         # 2. Validar estado
         if not is_active:
-            logger.debug(f"⏸️ Dispositivo inactivo: {hardware_id}")
+            # logger.debug(f"⏸️ Dispositivo inactivo: {hardware_id}")
             return
         
-        # 3. Guardar en Redis TimeSeries
+        # 3. Guardar en Redis TimeSeries (Operación Síncrona, pero rápida)
         ts_repo = TimeSeriesRepository(redis_client)
         ts_repo.add_measurements(
             user_id=user_id,
@@ -69,25 +70,18 @@ def process_shelly_data(db: Session, redis_client: Redis, data: ShellyIngestData
             amps=amps
         )
 
-        # 4. ✅ ENVIAR A WEBSOCKET CORRECTAMENTE
+        # 4. ✅ ENVIAR A WEBSOCKET (NATIVO)
+        # Al ser una función async, podemos usar 'await' directamente.
+        # Esto asegura que el mensaje se envíe en el mismo bucle donde están los clientes.
         message_to_broadcast = {
             "watts": watts,
             "volts": volts,
             "amps": amps
         }
         
-        # ✅ Ejecutar el broadcast async desde un contexto síncrono
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
+        await manager.broadcast_to_device(device_id, json.dumps(message_to_broadcast))
         
-        loop.create_task(
-            manager.broadcast_to_device(device_id, json.dumps(message_to_broadcast))
-        )
-        
-        logger.debug(f"📡 WebSocket broadcast enviado para device {device_id}")
+        logger.debug(f"📡 WS enviado Device {device_id}: {watts}W")
 
     except json.JSONDecodeError as e:
         logger.error(f"❌ Error decodificando cache para {hardware_id}: {e}")

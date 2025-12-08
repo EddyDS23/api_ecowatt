@@ -12,7 +12,7 @@ from app.core import logger
 router = APIRouter(prefix="/ingest", tags=["Ingestion"])
 
 @router.post("/shelly")
-def ingest_shelly_data(
+async def ingest_shelly_data(
     data: ShellyIngestData,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),

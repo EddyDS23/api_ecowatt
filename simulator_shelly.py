@@ -10,25 +10,27 @@ DEVICE_MODEL = "shellyplus1pm"
 DEVICE_MAC = "1a2b3c4a5b6c7d"     # ¡Asegúrate que coincida con tu BD!
 API_URL = "https://core-cloud.dev/api/v1/ingest/shelly"
 
-# --- 2. CONFIGURACIÓN MQTT (Igual que tu .env) ---
+# --- 2. CONFIGURACIÓN MQTT ---
 MQTT_HOST = "134.209.61.74"
 MQTT_PORT = 1883
 MQTT_USER = "ecowatt_shelly"
 MQTT_PASS = "SjTqQh4htnRK7rqN8tsOmSgFY"
 
-# Topic de comandos (minúsculas siempre)
+# Topic de comandos
 COMMAND_TOPIC = f"{DEVICE_MODEL}-{DEVICE_MAC.lower()}/rpc"
 
 # --- 3. ESTADO INTERNO ---
 device_state = {
-    "ison": True,      # Empieza encendido
+    "ison": True,
     "apower": 0.0,
     "voltage": 220.0,
     "current": 0.0
 }
 
 # --- FUNCIONES MQTT (CONTROL) ---
-def on_connect(client, userdata, flags, rc):
+
+# 🔥 CORRECCIÓN AQUÍ: Agregamos 'properties=None' para compatibilidad con paho-mqtt v2
+def on_connect(client, userdata, flags, rc, properties=None):
     if rc == 0:
         print(f"✅ [MQTT] Conectado. Escuchando en: {COMMAND_TOPIC}")
         client.subscribe(COMMAND_TOPIC)
@@ -45,7 +47,6 @@ def on_message(client, userdata, msg):
 
         print(f"\n📨 [COMANDO RECIBIDO] {method}")
 
-        # Respuesta base
         response = {"id": req_id, "src": f"{DEVICE_MODEL}-{DEVICE_MAC.lower()}", "dst": src}
         result = {}
 
@@ -78,34 +79,29 @@ def on_message(client, userdata, msg):
                  "uptime": 999
              }
 
-        # Enviar respuesta
         response["result"] = result
         client.publish(src, json.dumps(response))
-        # print(f"   📤 Respuesta enviada")
 
     except Exception as e:
         print(f"❌ Error procesando mensaje: {e}")
 
 # --- FUNCIONES HTTP (INGESTA DE DATOS) ---
 def send_data_loop():
-    """Bucle infinito que envía datos cada 5 segundos"""
     print("🚀 [HTTP] Iniciando envío de datos de consumo...")
     
     while True:
         try:
-            # 1. Calcular valores según estado
+            # 1. Calcular valores
             if device_state["ison"]:
-                # Generar consumo simulado
                 device_state["voltage"] = round(random.uniform(215.0, 225.0), 1)
-                device_state["apower"] = round(random.uniform(500.0, 2500.0), 1) # Entre 500W y 2500W
+                device_state["apower"] = round(random.uniform(500.0, 2500.0), 1)
                 device_state["current"] = round(device_state["apower"] / device_state["voltage"], 2)
             else:
-                # Si está apagado, todo a cero (pero voltaje se mantiene)
                 device_state["apower"] = 0.0
                 device_state["current"] = 0.0
                 device_state["voltage"] = 220.0
 
-            # 2. Preparar Payload (Formato Shelly)
+            # 2. Preparar Payload
             payload = {
                 "switch:0": {
                     "id": 0,
@@ -118,35 +114,39 @@ def send_data_loop():
                 }
             }
 
+            print(f"\n📦 [PAYLOAD] Enviando JSON: {json.dumps(payload)}")
+
             # 3. Enviar a la API
-            # Nota: Si está apagado, enviamos 0W. Esto es IMPORTANTE para que 
-            # la gráfica baje a 0 y no se quede "congelada" en el último valor alto.
             r = requests.post(API_URL, json=payload, timeout=2)
             
             if r.status_code == 200:
                 status_icon = "🟢" if device_state["ison"] else "🔴"
-                print(f"{status_icon} [DATA] Enviado: {device_state['apower']} W | {device_state['voltage']} V | {device_state['current']} A",flush=True)
+                print(f"{status_icon} [API] Respuesta 200 OK")
             else:
-                print(f"⚠️ [HTTP] Error {r.status_code}: {r.text}",flush=True)
+                print(f"⚠️ [API] Error {r.status_code}: {r.text}")
 
         except Exception as e:
-            print(f"❌ Error de conexión HTTP: {e}",flush=True)
+            print(f"❌ Error de conexión HTTP: {e}")
 
-        time.sleep(10) # Enviar cada 5 segundos
+        time.sleep(5)
 
 # --- MAIN ---
 if __name__ == "__main__":
-    # 1. Iniciar Cliente MQTT
-    mqtt_client = mqtt.Client(client_id=f"sim_{DEVICE_MAC}_full")
+    unique_id = f"sim_{DEVICE_MAC}_{int(time.time())}"
+    
+    try:
+        from paho.mqtt.enums import CallbackAPIVersion
+        mqtt_client = mqtt.Client(CallbackAPIVersion.VERSION2, client_id=unique_id)
+    except:
+        mqtt_client = mqtt.Client(client_id=unique_id)
+
     mqtt_client.username_pw_set(MQTT_USER, MQTT_PASS)
     mqtt_client.on_connect = on_connect
     mqtt_client.on_message = on_message
 
     try:
         mqtt_client.connect(MQTT_HOST, MQTT_PORT, 60)
-        mqtt_client.loop_start() # Hilo separado para MQTT
-
-        # 2. Iniciar Bucle de Datos en el hilo principal
+        mqtt_client.loop_start() 
         send_data_loop()
 
     except KeyboardInterrupt:
