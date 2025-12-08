@@ -41,7 +41,6 @@ class DeviceControlService:
     async def _send_mqtt_command(self, device_id: int, user_id: int, method: str, params: dict) -> Dict:
         """
         Función central para enviar comandos.
-        Se encarga de obtener los datos correctos del dispositivo y llamar al cliente MQTT.
         """
         # 1. Validar que el dispositivo exista
         device = self.device_repo.get_device_by_id_repository(device_id)
@@ -54,34 +53,41 @@ class DeviceControlService:
             logger.warning(f"⛔ Usuario {user_id} intentó controlar dispositivo ajeno {device_id}")
             return {"success": False, "error": "No autorizado"}
 
-        # 3. Obtener datos MQTT del dispositivo
-        # La MAC la tenemos guardada en mayúsculas en la BD
+        # 3. Obtener datos MQTT
         device_mac = device.dev_hardware_id
-        
-        # Obtenemos el prefijo técnico (ej: shellyplus2pm) de la BD.
-        # Si es un dispositivo antiguo que no tiene el campo, usamos un default seguro.
         mqtt_prefix = device.dev_mqtt_prefix or "shellyplus1pm"
 
-        # 4. Enviar la orden al Broker usando el nuevo método asíncrono universal
-        # El cliente MQTT se encargará de armar el topic: {prefix}-{mac}/rpc
+        # 4. Enviar la orden
         result = await mqtt_client.publish_command_async(
             device_mac=device_mac,
-            mqtt_prefix=mqtt_prefix,  # <--- Pasamos el prefijo dinámico
+            mqtt_prefix=mqtt_prefix,
             method=method,
             params=params
         )
         
-        # 5. Procesar resultado
+        # 5. Procesar resultado (AQUÍ ESTÁ EL CAMBIO)
         if result["success"]:
-            # Si fue un comando de cambio de estado, podemos añadir info extra
-            if method in ["Switch.Set", "Switch.Toggle"]:
-                 return {
-                    "success": True, 
-                    "message": "Comando ejecutado correctamente", 
-                    "device_name": device.dev_name,
-                    "result_data": result.get("response")
-                }
-            return result
+            
+            # Datos base de la respuesta
+            final_response = {
+                "success": True,
+                "message": "Comando ejecutado correctamente",
+                "device_name": device.dev_name, # Agregamos el nombre para que no salga null
+            }
+
+            # Caso 1: GetStatus (Mapeamos 'response' -> 'status')
+            if method == "Switch.GetStatus":
+                final_response["status"] = result.get("response", {})
+                return final_response
+
+            # Caso 2: Switch.Set / Toggle (Mapeamos datos específicos)
+            elif method in ["Switch.Set", "Switch.Toggle"]:
+                 final_response["result_data"] = result.get("response", {})
+                 return final_response
+            
+            # Caso 3: Otros métodos (Devolvemos genérico)
+            else:
+                return result
 
         else:
             return {
