@@ -125,12 +125,12 @@ def send_data_loop():
             
             if r.status_code == 200:
                 status_icon = "🟢" if device_state["ison"] else "🔴"
-                print(f"{status_icon} [DATA] Enviado: {device_state['apower']} W | {device_state['voltage']} V | {device_state['current']} A")
+                print(f"{status_icon} [DATA] Enviado: {device_state['apower']} W | {device_state['voltage']} V | {device_state['current']} A",flush=True)
             else:
-                print(f"⚠️ [HTTP] Error {r.status_code}: {r.text}")
+                print(f"⚠️ [HTTP] Error {r.status_code}: {r.text}",flush=True)
 
         except Exception as e:
-            print(f"❌ Error de conexión HTTP: {e}")
+            print(f"❌ Error de conexión HTTP: {e}",flush=True)
 
         time.sleep(10) # Enviar cada 5 segundos
 
