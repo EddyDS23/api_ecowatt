@@ -12,7 +12,8 @@ from app.services import (
     get_all_devices_by_user_service,
     get_device_by_id_service,
     update_device_service,
-    delete_device_service
+    delete_device_service,
+    change_device_status_service
 )
 
 router = APIRouter(prefix="/devices", tags=["Devices"])
@@ -47,4 +48,10 @@ def delete_device_route(dev_id: int, db: Session = Depends(get_db), current_user
     success = delete_device_service(db, dev_id=dev_id, user_id=current_user.user_id)
     if not success:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dispositivo no encontrado.")
-    
+
+
+@router.patch("/{dev_id}/status", status_code=status.HTTP_200_OK)
+def device_change_status_route(dev_id:int,db:Session = Depends(get_db), current_user:TokenData = Depends(get_current_user)):
+    success = change_device_status_service(db,dev_id=dev_id,user_id=current_user.user_id)
+    if not success:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Error al actualizar dispositivo")

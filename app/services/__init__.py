@@ -12,7 +12,8 @@ from .device_service import (
     get_all_devices_by_user_service,
     create_device_service,
     update_device_service,
-    delete_device_service
+    delete_device_service,
+    change_device_status_service
 )
 
 from .ingest_service import(

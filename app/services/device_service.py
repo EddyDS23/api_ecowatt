@@ -77,3 +77,15 @@ def delete_device_service(db: Session, dev_id: int, user_id: int) -> bool:
     return device_repo.delete_device_repository(dev_id)
 
 
+def change_device_status_service(db:Session, dev_id:int, user_id:int) -> bool:
+    device_repo = DeviceRepository(db)
+    device = device_repo.get_device_by_id_repository(dev_id)
+
+    if not device or device.dev_user_id != user_id:
+        return False # No se encontró o no pertenece al usuario
+        
+    return device_repo.change_device_status(dev_id)
+
+    
+
+
