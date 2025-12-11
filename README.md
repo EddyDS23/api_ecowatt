@@ -8,7 +8,7 @@ Sistema backend completo para monitoreo inteligente de consumo eléctrico en tie
 ---
 
 ## 📋 Tabla de Contenidos
-
+- [Explicacion del backend](#-explicacion-del-backend)
 - [Características Principales](#-características-principales)
 - [Arquitectura del Sistema](#-arquitectura-del-sistema)
 - [Stack Tecnológico](#-stack-tecnológico)
@@ -23,6 +23,97 @@ Sistema backend completo para monitoreo inteligente de consumo eléctrico en tie
 - [Troubleshooting](#-troubleshooting)
 - [Contribución](#-contribución)
 - [Licencia](#-licencia)
+
+---
+
+## 🚀 Explicacion del Backend
+
+# Arquitectura Funcional por Módulos
+
+Esta sección describe, a nivel conceptual, cómo trabaja cada módulo del backend y qué servicio aporta al sistema.
+
+---
+
+### 1. Módulo de Usuarios (`users`)
+Gestiona todo lo relacionado con el ciclo de vida de un usuario dentro del sistema.  
+Incluye registro, actualización de perfil, consulta del usuario autenticado y administración de atributos individuales como tarifa eléctrica o día de corte.  
+Este módulo coordina validaciones, reglas de negocio y persistencia para garantizar que la información del usuario sea consistente y segura.
+
+---
+
+### 2. Módulo de Autenticación (`auth`)
+Implementa el sistema de autenticación basado en JWT.  
+Emite tokens de acceso y tokens de refresco, valida credenciales, gestiona la renovación de sesiones y controla la revocación de tokens.  
+Permite que los usuarios accedan a rutas protegidas sin reenviar credenciales en cada solicitud, manteniendo seguridad y escalabilidad.
+
+---
+
+### 3. Módulo de Dispositivos (`devices`)
+Administra los dispositivos asociados a cada usuario.  
+Permite registrar nuevos dispositivos mediante su hardware ID, consultar la lista de dispositivos vinculados, obtener detalles individuales, renombrarlos o eliminarlos.  
+Sirve como base para que los dispositivos físicos puedan enviar datos al sistema, como consumo energético u otros valores relevantes.
+
+---
+
+### 4. Módulo de Tarifas Eléctricas (`tariffs`)
+Maneja las tarifas de energía que utiliza el backend para cálculos relacionados con consumo o análisis.  
+Soporta tarifas definidas por rangos de fechas para permitir actualizaciones sin afectar periodos previos.  
+Es un módulo clave para cualquier futura función de estimación, cálculo de costos o recomendaciones.
+
+---
+
+### 5. Módulo de Tokens y Sesiones (`refresh_tokens`)
+Controla el almacenamiento y validación de tokens de refresco emitidos a cada usuario.  
+Permite revocar sesiones de forma granular, incrementar la seguridad y garantizar que solo sesiones válidas continúen activas.  
+Complementa el sistema de autenticación principal.
+
+---
+
+### 6. Módulo de Base de Datos (`database`)
+Provee la conexión centralizada a PostgreSQL mediante SQLAlchemy.  
+Gestiona la creación de sesiones, el manejo transaccional y la comunicación con los repositorios.  
+Es el puente entre la API y la capa de persistencia.
+
+---
+
+### 7. Módulo de Modelos (`models`)
+Define las tablas y entidades que existen en la base de datos.  
+Cada modelo representa un recurso del sistema, como usuarios, dispositivos, tarifas o tokens de refresco.  
+Estandariza la estructura de datos y garantiza integridad a través de relaciones y restricciones.
+
+---
+
+### 8. Módulo de Repositorios (`repositories`)
+Capa encargada de leer, escribir y actualizar información en la base de datos.  
+Agrupa toda la lógica de persistencia y abstrae las consultas, proporcionando métodos reutilizables y seguros para los servicios.  
+Gracias a esta separación, los servicios se enfocan únicamente en reglas de negocio y no en detalles de SQL.
+
+---
+
+### 9. Módulo de Servicios (`services`)
+Contiene la lógica de negocio principal del backend.  
+Cada servicio usa los repositorios para obtener datos, aplica reglas y validaciones, transforma información y responde de forma coherente a los routers.  
+Es la capa que orquesta el funcionamiento interno del sistema.
+
+---
+
+### 10. Módulo de Routers (`routers`)
+Expone los endpoints públicos de la API.  
+Recibe las solicitudes HTTP, valida los datos de entrada mediante esquemas y delega el procesamiento a los servicios.  
+Define rutas como `/auth`, `/users`, `/devices` o `/tariffs`, manteniendo la API ordenada y modular.
+
+---
+
+### 11. Módulo de Configuración (`core`)
+Centraliza variables de entorno, llaves secretas, configuraciones globales y utilidades comunes.  
+Permite que la aplicación se adapte fácilmente a entornos locales o de producción sin modificar código.  
+También ayuda a mantener parámetros sensibles fuera del repositorio.
+
+---
+
+### 12. Punto de Entrada (`main.py`)
+Inicializa la aplicación FastAPI, carga todos los routers, configura CORS, registra middlewares y establece la estructura final del servidor.  
+Es el archivo que se ejecuta tanto en desarrollo como en producción y que pone en marcha todos los módulos anteriores.
 
 ---
 
