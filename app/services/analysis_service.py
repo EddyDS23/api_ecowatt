@@ -7,6 +7,7 @@ from app.database import SessionLocal, get_redis_client
 from app.repositories import DeviceRepository
 from app.core import logger
 from .alert_service import create_alert_and_recommendation # Importación clave
+from .dashboard_service import get_dashboard_summary
 
 # --- CONSTANTES DE ANÁLISIS ---
 VAMPIRE_CONSUMPTION_THRESHOLD_WATTS = 20  # Watts
@@ -17,6 +18,10 @@ VAMPIRE_ANALYSIS_END_HOUR_UTC = 11      # 5 AM (CST/Mexico City) es 11 AM UTC
 HIGH_PEAK_THRESHOLD_WATTS = 1500 # Umbral en Watts (ajusta según necesites)
 HIGH_PEAK_MIN_DURATION_MINUTES = 5 # Duración mínima en minutos
 HIGH_PEAK_ANALYSIS_HOURS = 3 # Cuántas horas hacia atrás analizar para picos
+
+OPTIMAL_DAILY_KWH_THRESHOLD = 5.0 # kWh/día (Consumo bajo = Óptimo)
+EXCESSIVE_DAILY_KWH_THRESHOLD = 10.0 # kWh/día (Consumo muy alto = Excesivo)
+LAST_OPTIMAL_CHECK_TIMESTAMP = datetime.min.replace(tzinfo=timezone.utc)
 
 def analyze_consumption_patterns():
     """
